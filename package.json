@@ -1,0 +1,41 @@
+{
+  "name": "ethereum-revocation-registry-controller",
+  "version": "1.0.0",
+  "description": "The controller module for interacting with Ethereum revocation lists & resolving revocation entries for EIP-5539.",
+  "main": "dist/index.js",
+  "typings": "dist/index",
+  "scripts": {
+    "prebuild": "echo \"Error: no prepublish specified\" && exit 1",
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/spherity/Ethereum-Revocation-Registry-Controller.git"
+  },
+  "author": {
+    "name": "Dennis von der Bey",
+    "email": "dennis@vonderbey.eu",
+    "url": "https://www.vonderbey.eu"
+  },
+  "contributors": [
+    {
+      "name": "Philipp Bolte",
+      "email": "philipp.bolte@spherity.com"
+    },
+    {
+      "name": "Lauritz Leifermann",
+      "email": "lauritz.leifermann@spherity.com"
+    }
+  ],
+  "license": "GPL-3.0-only",
+  "bugs": {
+    "url": "https://github.com/spherity/Ethereum-Revocation-Registry-Controller/issues"
+  },
+  "homepage": "https://github.com/spherity/Ethereum-Revocation-Registry-Controller#readme",
+  "devDependencies": {
+    "jest": "^29.0.1",
+    "ts-jest": "^28.0.8",
+    "typescript": "^4.8.2"
+  }
+}
