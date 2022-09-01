@@ -14,10 +14,10 @@ export class EthereumRevocationRegistryController {
 
   constructor(
     contract?: RevocationRegistry,
-    signer?: Signer,
-    chainNameOrId = 'mainnet',
     provider?: Provider,
+    signer?: Signer,
     rpcUrl?: string,
+    chainNameOrId = 'mainnet',
     address: string = DEFAULT_REGISTRY_ADDRESS
   ) {
     if (contract) {
