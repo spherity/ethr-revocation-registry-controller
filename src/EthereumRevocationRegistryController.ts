@@ -4,6 +4,7 @@
 import {RevocationRegistry, factories} from "ethr-revocation-list/types/ethers-contracts";
 import {JsonRpcProvider, Provider} from "@ethersproject/providers";
 import {Signer} from "@ethersproject/abstract-signer";
+import {ContractReceipt, ContractTransaction} from "@ethersproject/contracts";
 
 export const DEFAULT_REGISTRY_ADDRESS = '0x00000000000000000000000'
 
@@ -39,5 +40,9 @@ export class EthereumRevocationRegistryController {
 
   async isRevoked(namespace: string, list: string, revocationKey: string): Promise<boolean> {
     return this.registry.isRevoked(namespace, list, revocationKey);
+  }
+
+  async changeStatus(revoked: boolean, namespace: string, list: string, revocationKey: string): Promise<ContractTransaction> {
+    return this.registry.changeStatus(revoked, namespace, list, revocationKey);
   }
 }

@@ -24,18 +24,25 @@ describe('EthrRevocationRegistryController', () => {
     controller = new EthereumRevocationRegistryController(registry, web3Provider)
   })
 
-  describe('checks revocation status', () => {
-    it('for default namespaces', async () => {
-      await expect(controller.isRevoked(accounts[0], list, revocationKey)).resolves.toEqual(false);
-      await expect(controller.isRevoked(accounts[1], list, revocationKey)).resolves.toEqual(false);
-      await expect(controller.isRevoked(accounts[2], list, revocationKey)).resolves.toEqual(false);
-      await expect(controller.isRevoked(accounts[3], list, revocationKey)).resolves.toEqual(false);
-      await expect(controller.isRevoked(accounts[4], list, revocationKey)).resolves.toEqual(false);
-      await expect(controller.isRevoked(accounts[5], list, revocationKey)).resolves.toEqual(false);
-      await expect(controller.isRevoked(accounts[6], list, revocationKey)).resolves.toEqual(false);
-      await expect(controller.isRevoked(accounts[7], list, revocationKey)).resolves.toEqual(false);
-      await expect(controller.isRevoked(accounts[8], list, revocationKey)).resolves.toEqual(false);
-      await expect(controller.isRevoked(accounts[9], list, revocationKey)).resolves.toEqual(false);
-    })
+  it('checks revocation status for default namespaces', async () => {
+    await expect(controller.isRevoked(accounts[0], list, revocationKey)).resolves.toEqual(false)
+    await expect(controller.isRevoked(accounts[1], list, revocationKey)).resolves.toEqual(false)
+    await expect(controller.isRevoked(accounts[2], list, revocationKey)).resolves.toEqual(false)
+    await expect(controller.isRevoked(accounts[3], list, revocationKey)).resolves.toEqual(false)
+    await expect(controller.isRevoked(accounts[4], list, revocationKey)).resolves.toEqual(false)
+    await expect(controller.isRevoked(accounts[5], list, revocationKey)).resolves.toEqual(false)
+    await expect(controller.isRevoked(accounts[6], list, revocationKey)).resolves.toEqual(false)
+    await expect(controller.isRevoked(accounts[7], list, revocationKey)).resolves.toEqual(false)
+    await expect(controller.isRevoked(accounts[8], list, revocationKey)).resolves.toEqual(false)
+    await expect(controller.isRevoked(accounts[9], list, revocationKey)).resolves.toEqual(false)
   })
+
+  it('revokes key and then unrevokes it', async () => {
+    await expect(controller.isRevoked(accounts[0], list, revocationKey)).resolves.toEqual(false)
+    await controller.changeStatus(true, accounts[0], list, revocationKey)
+    await expect(controller.isRevoked(accounts[0], list, revocationKey)).resolves.toEqual(true)
+    await controller.changeStatus(false, accounts[0], list, revocationKey)
+    await expect(controller.isRevoked(accounts[0], list, revocationKey)).resolves.toEqual(false)
+  })
+
 })
