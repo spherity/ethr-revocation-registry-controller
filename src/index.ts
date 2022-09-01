@@ -1,0 +1,3 @@
+export {
+  EthereumRevocationRegistryController
+} from "./EthereumRevocationRegistryController"
