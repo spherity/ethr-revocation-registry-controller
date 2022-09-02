@@ -1,6 +1,6 @@
 import { createProvider, sleep, startMining, stopMining } from './testUtils'
 import {RevocationRegistry, factories} from "ethr-revocation-list/types/ethers-contracts";
-import {EthereumRevocationRegistryController} from "../src";
+import {EthereumRevocationRegistryController} from "../index";
 
 jest.setTimeout(30000)
 

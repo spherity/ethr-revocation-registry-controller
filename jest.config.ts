@@ -1,6 +1,6 @@
 module.exports = {
   moduleFileExtensions: ['js', 'json', 'ts'],
-  rootDir: 'test',
+  rootDir: 'src/test',
   testEnvironment: 'node',
   testRegex: '.*\\.test\\.ts$',
   transform: {
