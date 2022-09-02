@@ -16,7 +16,7 @@
     "noImplicitAny": true,
     "resolveJsonModule": true,
     "removeComments": false,
-    "declaration": false,
+    "declaration": true,
     "sourceMap": true,
     "incremental": true,
     "composite": false,

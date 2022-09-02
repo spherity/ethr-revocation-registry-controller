@@ -2,13 +2,16 @@
   "name": "ethereum-revocation-registry-controller",
   "version": "1.0.0",
   "description": "The controller module for interacting with Ethereum revocation lists & resolving revocation entries for EIP-5539.",
-  "main": "dist/index.js",
-  "typings": "dist/index",
+  "main": "dist/src/index.js",
+  "typings": "dist/src/index.d.ts",
   "scripts": {
     "prepublish": "npm run build",
-    "build": "tsc",
+    "build": "tsc -p tsconfig.json",
     "test": "jest"
   },
+  "files": [
+    "dist"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/spherity/Ethereum-Revocation-Registry-Controller.git"
