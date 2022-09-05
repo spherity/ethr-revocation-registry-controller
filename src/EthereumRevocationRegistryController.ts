@@ -1,7 +1,7 @@
 /**
  * A class that can be used to interact with the EIP-5539 contract on behalf of a local controller key-pair
  */
-import {RevocationRegistry, factories} from "ethr-revocation-list/types/ethers-contracts";
+import {RevocationRegistry, factories} from "@spherity/ethr-revocation-registry/types/ethers-contracts";
 import {JsonRpcProvider, Provider} from "@ethersproject/providers";
 import {Signer} from "@ethersproject/abstract-signer";
 import {ContractReceipt, ContractTransaction} from "@ethersproject/contracts";
