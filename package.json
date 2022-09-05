@@ -1,5 +1,5 @@
 {
-  "name": "ethereum-revocation-registry-controller",
+  "name": "@spherity/ethr-revocation-registry-controller",
   "version": "1.0.0",
   "description": "The controller module for interacting with Ethereum revocation lists & resolving revocation entries for EIP-5539.",
   "main": "dist/src/index.js",
