@@ -1,5 +1,6 @@
 export {
-  EthereumRevocationRegistryController
+  EthereumRevocationRegistryController,
+  EthereumRevocationRegistryControllerConfig
 } from "./EthereumRevocationRegistryController"
 
 export {

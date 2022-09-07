@@ -13,7 +13,7 @@ import {isEmpty} from "lodash";
 
 export const DEFAULT_REGISTRY_ADDRESS = '0x00000000000000000000000'
 
-interface IEthereumRevocationRegistryController {
+export interface EthereumRevocationRegistryControllerConfig {
     contract?: RevocationRegistry,
     provider?: Provider,
     signer?: Signer,
@@ -27,7 +27,7 @@ export class EthereumRevocationRegistryController {
   private signer?: Signer
   private address: string
 
-  constructor(config: IEthereumRevocationRegistryController) {
+  constructor(config: EthereumRevocationRegistryControllerConfig) {
     const address = config.address !== undefined ? config.address : DEFAULT_REGISTRY_ADDRESS;
     if (config.contract) {
       this.registry = config.contract
