@@ -100,3 +100,16 @@ export async function stopMining(provider: JsonRpcProvider): Promise<unknown> {
 export async function startMining(provider: JsonRpcProvider): Promise<unknown> {
   return provider.send('miner_start', [1])
 }
+
+export function GetDateForTodayPlusDays(numberOfDays: number): Date {
+  const currentDate = new Date();
+  let expiryDateInSeconds;
+  if(numberOfDays < 0) {
+    expiryDateInSeconds = currentDate.getTime()-(5*24*60*60)
+  } else {
+    expiryDateInSeconds = currentDate.getTime()+(5*24*60*60)
+  }
+  const expiryDate = new Date();
+  expiryDate.setTime(expiryDateInSeconds);
+  return expiryDate;
+}
