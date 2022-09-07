@@ -13,25 +13,28 @@ import {isEmpty} from "lodash";
 
 export const DEFAULT_REGISTRY_ADDRESS = '0x00000000000000000000000'
 
+interface IEthereumRevocationRegistryController {
+    contract?: RevocationRegistry,
+    provider?: Provider,
+    signer?: Signer,
+    rpcUrl?: string,
+    chainNameOrId?: string,
+    address?: string;
+}
+
 export class EthereumRevocationRegistryController {
   private registry: RevocationRegistry
   private signer?: Signer
   private address: string
 
-  constructor(
-    contract?: RevocationRegistry,
-    provider?: Provider,
-    signer?: Signer,
-    rpcUrl?: string,
-    chainNameOrId = "mainnet",
-    address: string = DEFAULT_REGISTRY_ADDRESS
-  ) {
-    if (contract) {
-      this.registry = contract
-    } else if (provider || signer?.provider || rpcUrl) {
-      let prov = provider || signer?.provider
-      if(!prov && rpcUrl) {
-        prov = new JsonRpcProvider(rpcUrl, chainNameOrId || 'any')
+  constructor(config: IEthereumRevocationRegistryController) {
+    const address = config.address !== undefined ? config.address : DEFAULT_REGISTRY_ADDRESS;
+    if (config.contract) {
+      this.registry = config.contract
+    } else if (config.provider || config.signer?.provider || config.rpcUrl) {
+      let prov = config.provider || config.signer?.provider
+      if(!prov && config.rpcUrl) {
+        prov = new JsonRpcProvider(config.rpcUrl, config.chainNameOrId || 'any')
       } else {
         throw new Error("Provider and/org rpcUrl required if contract isn't specified!")
       }
@@ -42,7 +45,7 @@ export class EthereumRevocationRegistryController {
     } else {
       throw new Error("Either a contract instance or a provider or rpcUrl is required to initialize!")
     }
-    this.signer = signer
+    this.signer = config.signer
     this.address = address
   }
 
@@ -99,14 +102,18 @@ export class EthereumRevocationRegistryController {
     return this.registry.changeStatusDelegated(revoked, revocationKeyPath.namespace,  revocationKeyPath.list, revocationKeyPath.revocationKey);
   }
 
-  async changeStatusInList(revocationListPath: RevocationListPath, revocationKeyInstructions: RevocationKeyInstruction[]): Promise<ContractTransaction> {
+  async changeStatusesInList(revocationListPath: RevocationListPath, revocationKeyInstructions: RevocationKeyInstruction[]): Promise<ContractTransaction> {
     this.validateRevocationListPath(revocationListPath);
     let revocationKeys: string[] = [];
     let revokedStatuses: boolean[] = [];
     revocationKeyInstructions.forEach((revocationKeyInstruction) => {
-      if(!revocationKeyInstruction.revocationKey || !revocationKeyInstruction.revoked) {
-        throw new Error(`revocationKey & revoked in RevocationKeyInstruction must not be null!`)
+      if(!revocationKeyInstruction.revocationKey) {
+        throw new Error(`revocationKey in RevocationKeyInstruction must not be null!`)
       }
+      if(revocationKeyInstruction.revoked === undefined) {
+        throw new Error(`revoked in RevocationKeyInstruction must not be null!`)
+      }
+      this.validateBytes32(revocationKeyInstruction.revocationKey);
       revocationKeys.push(revocationKeyInstruction.revocationKey);
       revokedStatuses.push(revocationKeyInstruction.revoked);
     })
