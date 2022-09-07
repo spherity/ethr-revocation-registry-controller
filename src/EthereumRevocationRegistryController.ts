@@ -63,13 +63,13 @@ export class EthereumRevocationRegistryController {
 
   private validateRevocationListPath(revocationListPath: RevocationListPath) {
     if(!revocationListPath) {
-      throw new Error(`revocationPath must not be null`)
+      throw new Error(`revocationListPath must not be null`)
     }
     if(isEmpty(revocationListPath.namespace)) {
-      throw new Error(`namespace must not be null`)
+      throw new Error(`namespace in revocationListPath must not be null`)
     }
     if(isEmpty(revocationListPath.list)) {
-      throw new Error(`list must not be null`)
+      throw new Error(`list in revocationListPath must not be null`)
     }
 
     this.validateAddress(revocationListPath.namespace);
@@ -78,7 +78,7 @@ export class EthereumRevocationRegistryController {
 
   private validateRevocationKeyPath(revocationKeyPath: RevocationKeyPath) {
     if(isEmpty(revocationKeyPath.revocationKey)) {
-      throw new Error(`list must not be null`)
+      throw new Error(`revocationKey in revocationKeyPath must not be null`)
     }
     this.validateRevocationListPath(revocationKeyPath)
     this.validateBytes32(revocationKeyPath.revocationKey);
@@ -105,7 +105,7 @@ export class EthereumRevocationRegistryController {
     let revokedStatuses: boolean[] = [];
     revocationKeyInstructions.forEach((revocationKeyInstruction) => {
       if(!revocationKeyInstruction.revocationKey || !revocationKeyInstruction.revoked) {
-        throw new Error(`revocationKey & revoked must not be null!`)
+        throw new Error(`revocationKey & revoked in RevocationKeyInstruction must not be null!`)
       }
       revocationKeys.push(revocationKeyInstruction.revocationKey);
       revokedStatuses.push(revocationKeyInstruction.revoked);
