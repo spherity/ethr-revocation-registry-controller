@@ -6,6 +6,10 @@ import {JsonRpcProvider, Provider} from "@ethersproject/providers";
 import {Signer} from "@ethersproject/abstract-signer";
 import {ContractTransaction} from "@ethersproject/contracts";
 import web3 from "web3";
+import {RevocationListPath} from "./types/RevocationListPath";
+import {RevocationKeyInstruction} from "./types/RevocationKeyInstruction";
+import {RevocationKeyPath} from "./types/RevocationKeyPath";
+import {omit} from "lodash";
 
 export const DEFAULT_REGISTRY_ADDRESS = '0x00000000000000000000000'
 
@@ -57,50 +61,41 @@ export class EthereumRevocationRegistryController {
     }
   }
 
-  private validateFullRevocationPath(revocationPath: RevocationPathDto) {
+  private validateRevocationPath(revocationPath: RevocationKeyPath | RevocationListPath) {
     if(!revocationPath) {
       throw new Error(`revocationPath must not be null`)
     }
     this.validateAddress(revocationPath.namespace);
     this.validateBytes32(revocationPath.list);
-    this.validateBytes32(revocationPath.revocationKey);
+    if((revocationPath as RevocationKeyPath).revocationKey !== undefined) this.validateBytes32((revocationPath as RevocationKeyPath).revocationKey);
   }
 
-  private validatePartialRevocationPath(revocationPath: Omit<RevocationPathDto, "revocationKey">) {
-    if(!revocationPath) {
-      throw new Error(`revocationPath must not be null`)
-    }
-    this.validateAddress(revocationPath.namespace);
-    this.validateBytes32(revocationPath.list);
+  async isRevoked(revocationKeyPath: RevocationKeyPath): Promise<boolean> {
+    this.validateRevocationPath(revocationKeyPath);
+    return this.registry.isRevoked(revocationKeyPath.namespace, revocationKeyPath.list, revocationKeyPath.revocationKey);
   }
 
-  async isRevoked(revocationPath: RevocationPathDto): Promise<boolean> {
-    this.validateFullRevocationPath(revocationPath);
-    return this.registry.isRevoked(revocationPath.namespace, revocationPath.list, revocationPath.revocationKey);
+  async changeStatus(revoked: boolean, revocationKeyPath: RevocationKeyPath): Promise<ContractTransaction> {
+    this.validateRevocationPath(revocationKeyPath);
+    return this.registry.changeStatus(revoked, revocationKeyPath.namespace, revocationKeyPath.list, revocationKeyPath.revocationKey);
   }
 
-  async changeStatus(revoked: boolean, revocationPath: RevocationPathDto): Promise<ContractTransaction> {
-    this.validateFullRevocationPath(revocationPath);
-    return this.registry.changeStatus(revoked, revocationPath.namespace, revocationPath.list, revocationPath.revocationKey);
+  async changeStatusDelegated(revoked: boolean, revocationKeyPath: RevocationKeyPath): Promise<ContractTransaction> {
+    this.validateRevocationPath(revocationKeyPath);
+    return this.registry.changeStatusDelegated(revoked, revocationKeyPath.namespace,  revocationKeyPath.list, revocationKeyPath.revocationKey);
   }
 
-  async changeStatusDelegated(revoked: boolean, revocationPath: RevocationPathDto): Promise<ContractTransaction> {
-    this.validateFullRevocationPath(revocationPath);
-    return this.registry.changeStatusDelegated(revoked, revocationPath.namespace,  revocationPath.list, revocationPath.revocationKey);
-  }
-
-
-  async changeStatusInList(revocationPath: Omit<RevocationPathDto, "revocationKey">, revocationKeyStatuses: RevocationKeyStatusDto[]): Promise<ContractTransaction> {
-    this.validatePartialRevocationPath(revocationPath);
+  async changeStatusInList(revocationListPath: RevocationListPath, revocationKeyInstructions: RevocationKeyInstruction[]): Promise<ContractTransaction> {
+    this.validateRevocationPath(revocationListPath);
     let revocationKeys: string[] = [];
     let revokedStatuses: boolean[] = [];
-    revocationKeyStatuses.forEach((revocationKeyStatus) => {
-      if(!revocationKeyStatus.revocationKey || !revocationKeyStatus.revoked) {
+    revocationKeyInstructions.forEach((revocationKeyInstruction) => {
+      if(!revocationKeyInstruction.revocationKey || !revocationKeyInstruction.revoked) {
         throw new Error(`revocationKey & revoked must not be null!`)
       }
-      revocationKeys.push(revocationKeyStatus.revocationKey);
-      revokedStatuses.push(revocationKeyStatus.revoked);
+      revocationKeys.push(revocationKeyInstruction.revocationKey);
+      revokedStatuses.push(revocationKeyInstruction.revoked);
     })
-    return this.registry.changeStatusesInList(revokedStatuses, revocationPath.namespace, revocationPath.list, revocationKeys);
+    return this.registry.changeStatusesInList(revokedStatuses, revocationListPath.namespace, revocationListPath.list, revocationKeys);
   }
 }
