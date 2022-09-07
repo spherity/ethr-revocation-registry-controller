@@ -7,6 +7,7 @@ import {
 } from "../src";
 import {Signer} from "@ethersproject/abstract-signer";
 import web3 from "web3";
+import {GetDateForTodayPlusDays} from "./testUtils";
 
 jest.setTimeout(30000)
 
@@ -18,7 +19,11 @@ describe('EthrRevocationRegistryController', () => {
     isRevoked: jest.fn(),
     changeStatus: jest.fn(),
     changeStatusDelegated: jest.fn(),
-    changeStatusesInList: jest.fn()
+    changeStatusesInList: jest.fn(),
+    changeStatusesInListDelegated: jest.fn(),
+    changeListOwner: jest.fn(),
+    addListDelegate: jest.fn(),
+    removeListDelegate: jest.fn(),
   } as unknown as RevocationRegistry;
 
   const signerMock = {
@@ -387,6 +392,379 @@ describe('EthrRevocationRegistryController', () => {
         ];
         expect(registry.changeStatusesInList(revocationListPath, revocationKeyInstructions)).rejects.toThrow(Error);
         expect(registryContractMock.changeStatusesInList).toHaveBeenCalledTimes(0);
+      })
+    })
+  })
+
+  describe('changeStatusesInListDelegated input verification', () => {
+    it('should let valid parameters pass', async () => {
+      const revocationStatus: boolean = true;
+      const revocationListPath: RevocationListPath = {
+        namespace: validAddress,
+        list: web3.utils.keccak256("listname"),
+      }
+      const revocationKeyInstructions: RevocationKeyInstruction[] = [
+        {
+          revocationKey: web3.utils.keccak256("revocationKey"),
+          revoked: true
+        },
+        {
+          revocationKey: web3.utils.keccak256("revocationKey2"),
+          revoked: true
+        },
+      ];
+      const revokedStatuses: boolean[] = [
+        revocationKeyInstructions[0].revoked,
+        revocationKeyInstructions[1].revoked,
+      ]
+      const revokationKeys: string[] = [
+        revocationKeyInstructions[0].revocationKey,
+        revocationKeyInstructions[1].revocationKey,
+      ]
+      expect(registry.changeStatusesInListDelegated(revocationListPath, revocationKeyInstructions)).resolves;
+      expect(registryContractMock.changeStatusesInListDelegated).toHaveBeenCalledTimes(1);
+      expect(registryContractMock.changeStatusesInListDelegated).toHaveBeenCalledWith(revokedStatuses, revocationListPath.namespace, revocationListPath.list, revokationKeys);
+    })
+    describe('namespace in revocationListPath', () => {
+      it('should notice emptiness', async () => {
+        const revocationListPath: RevocationListPath = {
+          namespace: "",
+          list: web3.utils.keccak256("listname"),
+        }
+        // can be empty because the check happens before
+        const revocationKeyInstructions: RevocationKeyInstruction[] = []
+        expect(registry.changeStatusesInListDelegated(revocationListPath, revocationKeyInstructions)).rejects.toThrow(Error);
+        expect(registryContractMock.changeStatusesInListDelegated).toHaveBeenCalledTimes(0);
+      })
+      it('should notice invalid address', async () => {
+        const revocationListPath: RevocationListPath = {
+          namespace: web3.utils.keccak256("invalidaddress"),
+          list: web3.utils.keccak256("listname"),
+        }
+        // can be empty because the check happens before
+        const revocationKeyInstructions: RevocationKeyInstruction[] = []
+        expect(registry.changeStatusesInListDelegated(revocationListPath, revocationKeyInstructions)).rejects.toThrow(Error);
+        expect(registryContractMock.changeStatusesInListDelegated).toHaveBeenCalledTimes(0);
+      })
+    })
+    describe('for list in revocationKeyPath', () => {
+      it('should notice emptiness', async () => {
+        const revocationListPath: RevocationListPath = {
+          namespace: validAddress,
+          list: "",
+        }
+        // can be empty because the check happens before
+        const revocationKeyInstructions: RevocationKeyInstruction[] = []
+        expect(registry.changeStatusesInListDelegated(revocationListPath, revocationKeyInstructions)).rejects.toThrow(Error);
+        expect(registryContractMock.changeStatusesInListDelegated).toHaveBeenCalledTimes(0);
+      })
+      it('should notice invalid bytes32', async () => {
+        const revocationListPath: RevocationListPath = {
+          namespace: validAddress,
+          list: validAddress,
+        }
+        // can be empty because the check happens before
+        const revocationKeyInstructions: RevocationKeyInstruction[] = []
+        expect(registry.changeStatusesInListDelegated(revocationListPath, revocationKeyInstructions)).rejects.toThrow(Error);
+        expect(registryContractMock.changeStatusesInListDelegated).toHaveBeenCalledTimes(0);
+      })
+    })
+    describe('for revocationKey in revocationKeyInstruction', () => {
+      it('should notice emptiness', async () => {
+        const revocationStatus: boolean = true;
+        const revocationListPath: RevocationListPath = {
+          namespace: validAddress,
+          list: web3.utils.keccak256("listname"),
+        }
+        const revocationKeyInstructions: RevocationKeyInstruction[] = [
+          {
+            revocationKey: "",
+            revoked: true
+          },
+          {
+            revocationKey: web3.utils.keccak256("revocationKey2"),
+            revoked: true
+          },
+        ];
+        expect(registry.changeStatusesInListDelegated(revocationListPath, revocationKeyInstructions)).rejects.toThrow(Error);
+        expect(registryContractMock.changeStatusesInListDelegated).toHaveBeenCalledTimes(0);
+      })
+      it('should notice invalid bytes32', async () => {
+        const revocationStatus: boolean = true;
+        const revocationListPath: RevocationListPath = {
+          namespace: validAddress,
+          list: web3.utils.keccak256("listname"),
+        }
+        const revocationKeyInstructions: RevocationKeyInstruction[] = [
+          {
+            revocationKey: validAddress,
+            revoked: true
+          } as any,
+          {
+            revocationKey: web3.utils.keccak256("revocationKey2"),
+            revoked: true
+          },
+        ];
+        expect(registry.changeStatusesInListDelegated(revocationListPath, revocationKeyInstructions)).rejects.toThrow(Error);
+        expect(registryContractMock.changeStatusesInListDelegated).toHaveBeenCalledTimes(0);
+      })
+    })
+    describe('for revoked in revocationKeyInstruction', () => {
+      it('should notice emptiness', async () => {
+        const revocationStatus: boolean = true;
+        const revocationListPath: RevocationListPath = {
+          namespace: validAddress,
+          list: web3.utils.keccak256("listname"),
+        }
+        const revocationKeyInstructions: RevocationKeyInstruction[] = [
+          {
+            revocationKey: web3.utils.keccak256("revocationKey"),
+            revoked: undefined
+          } as any,
+          {
+            revocationKey: web3.utils.keccak256("revocationKey2"),
+            revoked: true
+          },
+        ];
+        expect(registry.changeStatusesInListDelegated(revocationListPath, revocationKeyInstructions)).rejects.toThrow(Error);
+        expect(registryContractMock.changeStatusesInListDelegated).toHaveBeenCalledTimes(0);
+      })
+    })
+  })
+
+  describe('changeListOwner input verification', () => {
+    it('should let valid parameters pass', async () => {
+      const revocationListPath: RevocationListPath = {
+        namespace: validAddress,
+        list: web3.utils.keccak256("listname"),
+      }
+
+      expect(registry.changeListOwner(revocationListPath, validAddress)).resolves;
+      expect(registryContractMock.changeListOwner).toHaveBeenCalledTimes(1);
+      expect(registryContractMock.changeListOwner).toHaveBeenCalledWith(validAddress, revocationListPath.namespace, revocationListPath.list);
+    })
+    describe('namespace in revocationListPath', () => {
+      it('should notice emptiness', async () => {
+        const revocationListPath: RevocationListPath = {
+          namespace: "",
+          list: web3.utils.keccak256("listname"),
+        }
+
+        expect(registry.changeListOwner(revocationListPath, validAddress)).rejects.toThrow(Error);
+        expect(registryContractMock.changeListOwner).toHaveBeenCalledTimes(0);
+      })
+      it('should notice invalid address', async () => {
+        const revocationListPath: RevocationListPath = {
+          namespace: web3.utils.keccak256("invalidaddress"),
+          list: web3.utils.keccak256("listname"),
+        }
+
+        expect(registry.changeListOwner(revocationListPath, validAddress)).rejects.toThrow(Error);
+        expect(registryContractMock.changeListOwner).toHaveBeenCalledTimes(0);
+      })
+    })
+    describe('for list in revocationListPath', () => {
+      it('should notice emptiness', async () => {
+        const revocationListPath: RevocationListPath = {
+          namespace: validAddress,
+          list: "",
+        }
+        expect(registry.changeListOwner(revocationListPath, validAddress)).rejects.toThrow(Error);
+        expect(registryContractMock.changeListOwner).toHaveBeenCalledTimes(0);
+      })
+      it('should notice invalid bytes32', async () => {
+        const revocationListPath: RevocationListPath = {
+          namespace: validAddress,
+          list: validAddress,
+        }
+        expect(registry.changeListOwner(revocationListPath, validAddress)).rejects.toThrow(Error);
+        expect(registryContractMock.changeListOwner).toHaveBeenCalledTimes(0);
+      })
+    })
+    describe('for newOwner', () => {
+      it('should notice emptiness', async () => {
+        const revocationListPath: RevocationListPath = {
+          namespace: "validAddress",
+          list: web3.utils.keccak256("listname"),
+        }
+        expect(registry.changeListOwner(revocationListPath, "")).rejects.toThrow(Error);
+        expect(registryContractMock.changeListOwner).toHaveBeenCalledTimes(0);
+      })
+      it('should notice invalid address', async () => {
+        const revocationListPath: RevocationListPath = {
+          namespace: validAddress,
+          list: web3.utils.keccak256("listname"),
+        }
+        expect(registry.changeListOwner(revocationListPath, web3.utils.keccak256("invalidaddress"))).rejects.toThrow(Error);
+        expect(registryContractMock.changeListOwner).toHaveBeenCalledTimes(0);
+      })
+    })
+  })
+
+  describe('addListDelegate input verification', () => {
+    it('should let valid parameters pass', async () => {
+      const revocationListPath: RevocationListPath = {
+        namespace: validAddress,
+        list: web3.utils.keccak256("listname"),
+      }
+      const expiryDate = GetDateForTodayPlusDays(5);
+      const expiryDateInSeconds = expiryDate.getTime()/1000;
+
+      expect(registry.addListDelegate(revocationListPath, validAddress, expiryDate)).resolves;
+      expect(registryContractMock.addListDelegate).toHaveBeenCalledTimes(1);
+      expect(registryContractMock.addListDelegate).toHaveBeenCalledWith(validAddress, revocationListPath.namespace, revocationListPath.list, expiryDateInSeconds);
+    })
+    describe('namespace in revocationListPath', () => {
+      it('should notice emptiness', async () => {
+        const revocationListPath: RevocationListPath = {
+          namespace: "",
+          list: web3.utils.keccak256("listname"),
+        }
+
+        const expiryDate = GetDateForTodayPlusDays(5);
+
+        expect(registry.addListDelegate(revocationListPath, validAddress, expiryDate)).rejects.toThrow(Error);
+        expect(registryContractMock.addListDelegate).toHaveBeenCalledTimes(0);
+      })
+      it('should notice invalid address', async () => {
+        const revocationListPath: RevocationListPath = {
+          namespace: web3.utils.keccak256("invalidaddress"),
+          list: web3.utils.keccak256("listname"),
+        }
+
+        const expiryDate = GetDateForTodayPlusDays(5);
+
+        expect(registry.addListDelegate(revocationListPath, validAddress, expiryDate)).rejects.toThrow(Error);
+        expect(registryContractMock.addListDelegate).toHaveBeenCalledTimes(0);
+      })
+    })
+    describe('for list in revocationListPath', () => {
+      it('should notice emptiness', async () => {
+        const revocationListPath: RevocationListPath = {
+          namespace: validAddress,
+          list: "",
+        }
+        const expiryDate = GetDateForTodayPlusDays(5);
+
+        expect(registry.addListDelegate(revocationListPath, validAddress, expiryDate)).rejects.toThrow(Error);
+        expect(registryContractMock.addListDelegate).toHaveBeenCalledTimes(0);
+      })
+      it('should notice invalid bytes32', async () => {
+        const revocationListPath: RevocationListPath = {
+          namespace: validAddress,
+          list: validAddress,
+        }
+        const expiryDate = GetDateForTodayPlusDays(5);
+
+        expect(registry.addListDelegate(revocationListPath, validAddress, expiryDate)).rejects.toThrow(Error);
+        expect(registryContractMock.addListDelegate).toHaveBeenCalledTimes(0);
+      })
+    })
+    describe('for delegate', () => {
+      it('should notice emptiness', async () => {
+        const revocationListPath: RevocationListPath = {
+          namespace: "validAddress",
+          list: web3.utils.keccak256("listname"),
+        }
+        const expiryDate = GetDateForTodayPlusDays(5);
+
+        expect(registry.addListDelegate(revocationListPath, "", expiryDate)).rejects.toThrow(Error);
+        expect(registryContractMock.changeListOwner).toHaveBeenCalledTimes(0);
+      })
+      it('should notice invalid address', async () => {
+        const revocationListPath: RevocationListPath = {
+          namespace: validAddress,
+          list: web3.utils.keccak256("listname"),
+        }
+        const expiryDate = GetDateForTodayPlusDays(5);
+
+        expect(registry.addListDelegate(revocationListPath, web3.utils.keccak256("invalidaddress"), expiryDate)).rejects.toThrow(Error);
+        expect(registryContractMock.addListDelegate).toHaveBeenCalledTimes(0);
+      })
+    })
+    describe('for expiryDate', () => {
+      it('should notice date in the past', async () => {
+        const revocationListPath: RevocationListPath = {
+          namespace: validAddress,
+          list: web3.utils.keccak256("listname"),
+        }
+        const expiryDate = GetDateForTodayPlusDays(-5);
+
+        expect(registry.addListDelegate(revocationListPath, validAddress, expiryDate)).rejects.toThrow(Error);
+        expect(registryContractMock.addListDelegate).toHaveBeenCalledTimes(0);
+      })
+    })
+  })
+
+  describe('removeListDelegate input verification', () => {
+    it('should let valid parameters pass', async () => {
+      const revocationListPath: RevocationListPath = {
+        namespace: validAddress,
+        list: web3.utils.keccak256("listname"),
+      }
+
+      expect(registry.removeListDelegate(revocationListPath, validAddress)).resolves;
+      expect(registryContractMock.removeListDelegate).toHaveBeenCalledTimes(1);
+      expect(registryContractMock.removeListDelegate).toHaveBeenCalledWith(validAddress, revocationListPath.namespace, revocationListPath.list);
+    })
+    describe('namespace in revocationListPath', () => {
+      it('should notice emptiness', async () => {
+        const revocationListPath: RevocationListPath = {
+          namespace: "",
+          list: web3.utils.keccak256("listname"),
+        }
+
+        expect(registry.removeListDelegate(revocationListPath, validAddress)).rejects.toThrow(Error);
+        expect(registryContractMock.removeListDelegate).toHaveBeenCalledTimes(0);
+      })
+      it('should notice invalid address', async () => {
+        const revocationListPath: RevocationListPath = {
+          namespace: web3.utils.keccak256("invalidaddress"),
+          list: web3.utils.keccak256("listname"),
+        }
+
+        expect(registry.removeListDelegate(revocationListPath, validAddress)).rejects.toThrow(Error);
+        expect(registryContractMock.removeListDelegate).toHaveBeenCalledTimes(0);
+      })
+    })
+    describe('for list in revocationListPath', () => {
+      it('should notice emptiness', async () => {
+        const revocationListPath: RevocationListPath = {
+          namespace: validAddress,
+          list: "",
+        }
+
+        expect(registry.removeListDelegate(revocationListPath, validAddress)).rejects.toThrow(Error);
+        expect(registryContractMock.removeListDelegate).toHaveBeenCalledTimes(0);
+      })
+      it('should notice invalid bytes32', async () => {
+        const revocationListPath: RevocationListPath = {
+          namespace: validAddress,
+          list: validAddress,
+        }
+
+        expect(registry.removeListDelegate(revocationListPath, validAddress)).rejects.toThrow(Error);
+        expect(registryContractMock.removeListDelegate).toHaveBeenCalledTimes(0);
+      })
+    })
+    describe('for delegate', () => {
+      it('should notice emptiness', async () => {
+        const revocationListPath: RevocationListPath = {
+          namespace: "validAddress",
+          list: web3.utils.keccak256("listname"),
+        }
+
+        expect(registry.removeListDelegate(revocationListPath, "")).rejects.toThrow(Error);
+        expect(registryContractMock.removeListDelegate).toHaveBeenCalledTimes(0);
+      })
+      it('should notice invalid address', async () => {
+        const revocationListPath: RevocationListPath = {
+          namespace: validAddress,
+          list: web3.utils.keccak256("listname"),
+        }
+
+        expect(registry.removeListDelegate(revocationListPath, web3.utils.keccak256("invalidaddress"))).rejects.toThrow(Error);
+        expect(registryContractMock.removeListDelegate).toHaveBeenCalledTimes(0);
       })
     })
   })

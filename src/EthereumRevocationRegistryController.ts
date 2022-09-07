@@ -119,4 +119,50 @@ export class EthereumRevocationRegistryController {
     })
     return this.registry.changeStatusesInList(revokedStatuses, revocationListPath.namespace, revocationListPath.list, revocationKeys);
   }
+
+  async changeStatusesInListDelegated(revocationListPath: RevocationListPath, revocationKeyInstructions: RevocationKeyInstruction[]): Promise<ContractTransaction> {
+    this.validateRevocationListPath(revocationListPath);
+    let revocationKeys: string[] = [];
+    let revokedStatuses: boolean[] = [];
+    revocationKeyInstructions.forEach((revocationKeyInstruction) => {
+      if(!revocationKeyInstruction.revocationKey) {
+        throw new Error(`revocationKey in RevocationKeyInstruction must not be null!`)
+      }
+      if(revocationKeyInstruction.revoked === undefined) {
+        throw new Error(`revoked in RevocationKeyInstruction must not be null!`)
+      }
+      this.validateBytes32(revocationKeyInstruction.revocationKey);
+      revocationKeys.push(revocationKeyInstruction.revocationKey);
+      revokedStatuses.push(revocationKeyInstruction.revoked);
+    })
+    return this.registry.changeStatusesInListDelegated(revokedStatuses, revocationListPath.namespace, revocationListPath.list, revocationKeys);
+  }
+
+  async changeListOwner(revocationListPath: RevocationListPath, newOwner: string): Promise<ContractTransaction> {
+    this.validateRevocationListPath(revocationListPath);
+    this.validateAddress(newOwner);
+    return this.registry.changeListOwner(revocationListPath.namespace, newOwner, revocationListPath.list);
+  }
+
+  async addListDelegate(revocationListPath: RevocationListPath, delegate: string, expiryDate: Date): Promise<ContractTransaction> {
+    this.validateRevocationListPath(revocationListPath);
+    this.validateAddress(delegate);
+    if(!expiryDate) {
+      throw new Error("expiryDate must not be null")
+    }
+    const today = new Date(Date.now())
+    if(expiryDate < today) {
+      throw new Error("expiryDate must not be in the future")
+    }
+    const expiryDateEpochSeconds = expiryDate.getTime() / 1000;
+
+    return this.registry.addListDelegate(revocationListPath.namespace, delegate, revocationListPath.list, expiryDateEpochSeconds);
+  }
+
+  async removeListDelegate(revocationListPath: RevocationListPath, delegate: string): Promise<ContractTransaction> {
+    this.validateRevocationListPath(revocationListPath);
+    this.validateAddress(delegate);
+
+    return this.registry.removeListDelegate(revocationListPath.namespace, delegate, revocationListPath.list);
+  }
 }
