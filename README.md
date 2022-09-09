@@ -39,7 +39,7 @@ const signer = web3.eth.accounts.privateKeyToAccount(
 );
 
 const config: EthereumRevocationRegistryControllerConfig = {
-  provider: infuraProvider,
+  provider: provider,
   signer: signer
 }
 
