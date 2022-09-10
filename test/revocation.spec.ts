@@ -1,4 +1,4 @@
-import { createProvider, sleep, startMining, stopMining } from './testUtils'
+import {createProvider, sleep, sleepForMs, startMining, stopMining} from './testUtils'
 import {RevocationRegistry, factories} from "@spherity/ethr-revocation-registry/types/ethers-contracts";
 import {EthereumRevocationRegistryController, RevocationKeyPath} from "../src";
 
@@ -51,6 +51,20 @@ describe('EthrRevocationRegistryController', () => {
     await expect(controller.isRevoked(generateRevocationKeyPathForAccount(accounts[0]))).resolves.toEqual(true)
     await controller.changeStatus(false, generateRevocationKeyPathForAccount(accounts[0]))
     await expect(controller.isRevoked(generateRevocationKeyPathForAccount(accounts[0]))).resolves.toEqual(false)
+  })
+
+  it('revokes key, unrevokes & checks status in the past correctly', async () => {
+    await controller.changeStatus(true, generateRevocationKeyPathForAccount(accounts[0]))
+    await sleepForMs(2000)
+    const revokedDate = new Date()
+    await sleepForMs(2000)
+    await controller.changeStatus(false, generateRevocationKeyPathForAccount(accounts[0]))
+    await sleepForMs(2000)
+    const unrevokedDate = new Date()
+    await sleepForMs(2000)
+    await expect(controller.isRevoked(generateRevocationKeyPathForAccount(accounts[0]), revokedDate)).resolves.toEqual(true)
+    await expect(controller.isRevoked(generateRevocationKeyPathForAccount(accounts[0]), unrevokedDate)).resolves.toEqual(false)
+    console.log("asd")
   })
 
 })

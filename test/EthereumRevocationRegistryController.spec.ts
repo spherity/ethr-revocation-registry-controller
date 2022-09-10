@@ -1,4 +1,4 @@
-import {RevocationRegistry} from "@spherity/ethr-revocation-registry/types/ethers-contracts";
+import {factories, RevocationRegistry} from "@spherity/ethr-revocation-registry/types/ethers-contracts";
 import {
   EthereumRevocationRegistryController,
   RevocationKeyInstruction,
@@ -7,12 +7,13 @@ import {
 } from "../src";
 import {Signer} from "@ethersproject/abstract-signer";
 import web3 from "web3";
-import {GetDateForTodayPlusDays} from "./testUtils";
+import {createProvider, GetDateForTodayPlusDays} from "./testUtils";
+import {when} from 'jest-when'
 
 jest.setTimeout(30000)
 
 const validAddress = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
-
+const web3Provider = createProvider();
 describe('EthrRevocationRegistryController', () => {
   let registry: EthereumRevocationRegistryController;
   const registryContractMock = {
@@ -24,6 +25,11 @@ describe('EthrRevocationRegistryController', () => {
     changeListOwner: jest.fn(),
     addListDelegate: jest.fn(),
     removeListDelegate: jest.fn(),
+    queryFilter: jest.fn(),
+    filters: {
+      ListStatusChanged: jest.fn(),
+      RevocationStatusChanged: jest.fn(),
+    }
   } as unknown as RevocationRegistry;
 
   const signerMock = {
@@ -38,6 +44,29 @@ describe('EthrRevocationRegistryController', () => {
   afterEach(async () => {
     jest.resetAllMocks();
   })
+
+  // describe('isRevoked at', () => {
+  //   it('should work', async () => {
+  //     const factory = new factories.RevocationRegistry__factory().connect(web3Provider.getSigner(0))
+  //     let originalRegistry = await factory.deploy()
+  //     originalRegistry = await originalRegistry.deployed()
+  //
+  //     const revocationKeyPath: RevocationKeyPath = {
+  //       namespace: validAddress,
+  //       list: web3.utils.keccak256("listname"),
+  //       revocationKey: web3.utils.keccak256("revocationKey")
+  //     }
+  //
+  //     const timestamp = GetDateForTodayPlusDays(-5);
+  //
+  //     when(registryContractMock.filters.ListStatusChanged).mockReturnValue({address: "", topics: [""]})
+  //     when(registryContractMock.filters.RevocationStatusChanged).mockReturnValue({address: "", topics: [""]})
+  //     when(registryContractMock.queryFilter).calledWith({address: "", topics: [""]}).mockResolvedValue([{} as any, {} as any]);
+  //     when(registryContractMock.queryFilter).calledWith({address: "", topics: [""]}).mockRejectedValue(new Error());
+  //
+  //     await registry.isRevoked(revocationKeyPath, timestamp);
+  //   })
+  // })
 
   describe('isRevoked input verification', () => {
     it('should let valid parameters pass', async () => {

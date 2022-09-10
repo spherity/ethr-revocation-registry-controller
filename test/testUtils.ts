@@ -113,3 +113,7 @@ export function GetDateForTodayPlusDays(numberOfDays: number): Date {
   expiryDate.setTime(expiryDateInSeconds);
   return expiryDate;
 }
+
+export function sleepForMs(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
