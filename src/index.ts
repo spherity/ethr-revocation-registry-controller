@@ -1,6 +1,7 @@
 export {
   EthereumRevocationRegistryController,
-  EthereumRevocationRegistryControllerConfig
+  EthereumRevocationRegistryControllerConfig,
+  IsRevokedOptions
 } from "./EthereumRevocationRegistryController"
 
 export {

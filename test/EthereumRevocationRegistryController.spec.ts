@@ -45,98 +45,130 @@ describe('EthrRevocationRegistryController', () => {
     jest.resetAllMocks();
   })
 
-  // describe('isRevoked at', () => {
-  //   it('should work', async () => {
-  //     const factory = new factories.RevocationRegistry__factory().connect(web3Provider.getSigner(0))
-  //     let originalRegistry = await factory.deploy()
-  //     originalRegistry = await originalRegistry.deployed()
-  //
-  //     const revocationKeyPath: RevocationKeyPath = {
-  //       namespace: validAddress,
-  //       list: web3.utils.keccak256("listname"),
-  //       revocationKey: web3.utils.keccak256("revocationKey")
-  //     }
-  //
-  //     const timestamp = GetDateForTodayPlusDays(-5);
-  //
-  //     when(registryContractMock.filters.ListStatusChanged).mockReturnValue({address: "", topics: [""]})
-  //     when(registryContractMock.filters.RevocationStatusChanged).mockReturnValue({address: "", topics: [""]})
-  //     when(registryContractMock.queryFilter).calledWith({address: "", topics: [""]}).mockResolvedValue([{} as any, {} as any]);
-  //     when(registryContractMock.queryFilter).calledWith({address: "", topics: [""]}).mockRejectedValue(new Error());
-  //
-  //     await registry.isRevoked(revocationKeyPath, timestamp);
-  //   })
-  // })
-
-  describe('isRevoked input verification', () => {
-    it('should let valid parameters pass', async () => {
+  describe('isRevoked', () => {
+    it('should work with default "latest" blockTag directly calling the contract', async () => {
       const revocationKeyPath: RevocationKeyPath = {
         namespace: validAddress,
         list: web3.utils.keccak256("listname"),
         revocationKey: web3.utils.keccak256("revocationKey")
       }
-      expect(registry.isRevoked(revocationKeyPath)).resolves;
+      when(registryContractMock.isRevoked).calledWith(
+          expect.anything(),
+          expect.anything(),
+          expect.anything(),
+          expect.objectContaining({blockTag: "latest"})
+      ).mockResolvedValue(false)
+
+      expect(registry.isRevoked(revocationKeyPath)).resolves.toEqual(false);
       expect(registryContractMock.isRevoked).toHaveBeenCalledTimes(1);
-      expect(registryContractMock.isRevoked).toHaveBeenCalledWith(revocationKeyPath.namespace, revocationKeyPath.list, revocationKeyPath.revocationKey);
+      expect(registryContractMock.queryFilter).toHaveBeenCalledTimes(0);
+      expect(registryContractMock.isRevoked).toHaveBeenCalledWith(revocationKeyPath.namespace, revocationKeyPath.list, revocationKeyPath.revocationKey, expect.objectContaining({blockTag: "latest"}));
     })
-    describe('namespace in revocationKeyPath', () => {
-      it('should notice emptiness', async () => {
+
+    it('should throw an error with invalid blockTag', async () => {
+      const blockTag = 123123213213212131312
+      const revocationKeyPath: RevocationKeyPath = {
+        namespace: validAddress,
+        list: web3.utils.keccak256("listname"),
+        revocationKey: web3.utils.keccak256("revocationKey")
+      }
+
+      when(registryContractMock.isRevoked).calledWith(
+          expect.anything(),
+          expect.anything(),
+          expect.anything(),
+          expect.objectContaining({blockTag: blockTag})
+      ).mockResolvedValue(undefined as any)
+
+      expect(registry.isRevoked(revocationKeyPath, {blockTag: blockTag})).rejects.toThrow(Error);
+      expect(registryContractMock.isRevoked).toHaveBeenCalledTimes(1);
+      expect(registryContractMock.queryFilter).toHaveBeenCalledTimes(0);
+      expect(registryContractMock.isRevoked).toHaveBeenCalledWith(revocationKeyPath.namespace, revocationKeyPath.list, revocationKeyPath.revocationKey, expect.objectContaining({blockTag: blockTag}));
+    })
+
+    describe('with timestamp', () => {
+      it('should throw an error if the events cannot be fetched', async () => {
         const revocationKeyPath: RevocationKeyPath = {
-          namespace: "",
+          namespace: validAddress,
           list: web3.utils.keccak256("listname"),
           revocationKey: web3.utils.keccak256("revocationKey")
         }
-        expect(registry.isRevoked(revocationKeyPath)).rejects.toThrow(Error);
+
+        const timestamp = GetDateForTodayPlusDays(-5);
+
+        when(registryContractMock.filters.ListStatusChanged).mockReturnValue({address: "", topics: [""]})
+        when(registryContractMock.filters.RevocationStatusChanged).mockReturnValue({address: "", topics: [""]})
+        when(registryContractMock.queryFilter).calledWith({
+          address: "",
+          topics: [""]
+        }).mockResolvedValue([{} as any, {} as any]);
+        when(registryContractMock.queryFilter).calledWith({address: "", topics: [""]}).mockRejectedValue(new Error("mocked error"));
         expect(registryContractMock.isRevoked).toHaveBeenCalledTimes(0);
-      })
-      it('should notice invalid address', async () => {
-        const revocationKeyPath: RevocationKeyPath = {
-          namespace: web3.utils.keccak256("invalidaddress"),
-          list: web3.utils.keccak256("listname"),
-          revocationKey: web3.utils.keccak256("revocationKey")
-        }
-        expect(registry.isRevoked(revocationKeyPath)).rejects.toThrow(Error);
-        expect(registryContractMock.isRevoked).toHaveBeenCalledTimes(0);
+
+        expect(registry.isRevoked(revocationKeyPath, {timestamp: timestamp})).rejects.toThrow(Error)
       })
     })
-    describe('for list in revocationKeyPath', () => {
-      it('should notice emptiness', async () => {
-        const revocationKeyPath: RevocationKeyPath = {
-          namespace: validAddress,
-          list: "",
-          revocationKey: web3.utils.keccak256("revocationKey")
-        }
-        expect(registry.isRevoked(revocationKeyPath)).rejects.toThrow(Error);
-        expect(registryContractMock.isRevoked).toHaveBeenCalledTimes(0);
+
+    describe('input verification', () => {
+      describe('namespace in revocationKeyPath', () => {
+        it('should notice emptiness', async () => {
+          const revocationKeyPath: RevocationKeyPath = {
+            namespace: "",
+            list: web3.utils.keccak256("listname"),
+            revocationKey: web3.utils.keccak256("revocationKey")
+          }
+          expect(registry.isRevoked(revocationKeyPath)).rejects.toThrow(Error);
+          expect(registryContractMock.isRevoked).toHaveBeenCalledTimes(0);
+        })
+        it('should notice invalid address', async () => {
+          const revocationKeyPath: RevocationKeyPath = {
+            namespace: web3.utils.keccak256("invalidaddress"),
+            list: web3.utils.keccak256("listname"),
+            revocationKey: web3.utils.keccak256("revocationKey")
+          }
+          expect(registry.isRevoked(revocationKeyPath)).rejects.toThrow(Error);
+          expect(registryContractMock.isRevoked).toHaveBeenCalledTimes(0);
+        })
       })
-      it('should notice invalid bytes32', async () => {
-        const revocationKeyPath: RevocationKeyPath = {
-          namespace: validAddress,
-          list: validAddress,
-          revocationKey: web3.utils.keccak256("revocationKey")
-        }
-        expect(registry.isRevoked(revocationKeyPath)).rejects.toThrow(Error);
-        expect(registryContractMock.isRevoked).toHaveBeenCalledTimes(0);
+      describe('for list in revocationKeyPath', () => {
+        it('should notice emptiness', async () => {
+          const revocationKeyPath: RevocationKeyPath = {
+            namespace: validAddress,
+            list: "",
+            revocationKey: web3.utils.keccak256("revocationKey")
+          }
+          expect(registry.isRevoked(revocationKeyPath)).rejects.toThrow(Error);
+          expect(registryContractMock.isRevoked).toHaveBeenCalledTimes(0);
+        })
+        it('should notice invalid bytes32', async () => {
+          const revocationKeyPath: RevocationKeyPath = {
+            namespace: validAddress,
+            list: validAddress,
+            revocationKey: web3.utils.keccak256("revocationKey")
+          }
+          expect(registry.isRevoked(revocationKeyPath)).rejects.toThrow(Error);
+          expect(registryContractMock.isRevoked).toHaveBeenCalledTimes(0);
+        })
       })
-    })
-    describe('for revocationKey in revocationKeyPath', () => {
-      it('should notice emptiness', async () => {
-        const revocationKeyPath: RevocationKeyPath = {
-          namespace: validAddress,
-          list: web3.utils.keccak256("listname"),
-          revocationKey: ""
-        }
-        expect(registry.isRevoked(revocationKeyPath)).rejects.toThrow(Error);
-        expect(registryContractMock.isRevoked).toHaveBeenCalledTimes(0);
-      })
-      it('should notice invalid bytes32', async () => {
-        const revocationKeyPath: RevocationKeyPath = {
-          namespace: validAddress,
-          list: web3.utils.keccak256("listname"),
-          revocationKey: validAddress
-        }
-        expect(registry.isRevoked(revocationKeyPath)).rejects.toThrow(Error);
-        expect(registryContractMock.isRevoked).toHaveBeenCalledTimes(0);
+      describe('for revocationKey in revocationKeyPath', () => {
+        it('should notice emptiness', async () => {
+          const revocationKeyPath: RevocationKeyPath = {
+            namespace: validAddress,
+            list: web3.utils.keccak256("listname"),
+            revocationKey: ""
+          }
+          expect(registry.isRevoked(revocationKeyPath)).rejects.toThrow(Error);
+          expect(registryContractMock.isRevoked).toHaveBeenCalledTimes(0);
+        })
+        it('should notice invalid bytes32', async () => {
+          const revocationKeyPath: RevocationKeyPath = {
+            namespace: validAddress,
+            list: web3.utils.keccak256("listname"),
+            revocationKey: validAddress
+          }
+          expect(registry.isRevoked(revocationKeyPath)).rejects.toThrow(Error);
+          expect(registryContractMock.isRevoked).toHaveBeenCalledTimes(0);
+        })
       })
     })
   })

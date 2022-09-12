@@ -2,7 +2,7 @@
  * A class that can be used to interact with the EIP-5539 contract on behalf of a local controller key-pair
  */
 import {RevocationRegistry, factories} from "@spherity/ethr-revocation-registry/types/ethers-contracts";
-import {JsonRpcProvider, Provider} from "@ethersproject/providers";
+import {BlockTag, JsonRpcProvider, Provider} from "@ethersproject/providers";
 import {Signer} from "@ethersproject/abstract-signer";
 import {ContractTransaction} from "@ethersproject/contracts";
 import web3 from "web3";
@@ -24,12 +24,17 @@ type TimestampedEvent = TypedEvent & {
 }
 
 export interface EthereumRevocationRegistryControllerConfig {
-    contract?: RevocationRegistry,
-    provider?: Provider,
-    signer?: Signer,
-    rpcUrl?: string,
-    chainNameOrId?: string,
-    address?: string;
+  contract?: RevocationRegistry,
+  provider?: Provider,
+  signer?: Signer,
+  rpcUrl?: string,
+  chainNameOrId?: string,
+  address?: string;
+}
+
+export interface IsRevokedOptions {
+  timestamp?: Date,
+  blockTag?: BlockTag
 }
 
 export class EthereumRevocationRegistryController {
@@ -125,8 +130,7 @@ export class EthereumRevocationRegistryController {
         this.registry.queryFilter(this.registry.filters.RevocationStatusChanged()),
       ]);
     } catch(error) {
-      console.log("Error retrieving events:", error)
-      throw new Error("Cannot fetch revocation state due error fetching events of contract:" + error)
+      throw new Error("Cannot fetch revocation state due error fetching events of contract: " + error)
     }
     const timestampedListStatusChangedEvents = await this.getTimestampedEventsUntilDate(queryFilterReturnValues[0], timestamp);
     const timestampedRevocationStatusChangedEvents = await this.getTimestampedEventsUntilDate(queryFilterReturnValues[1], timestamp);
@@ -140,12 +144,17 @@ export class EthereumRevocationRegistryController {
     return false
   }
 
-  async isRevoked(revocationKeyPath: RevocationKeyPath, timestamp?: Date): Promise<boolean> {
+  async isRevoked(revocationKeyPath: RevocationKeyPath, options?: IsRevokedOptions): Promise<boolean> {
     this.validateRevocationKeyPath(revocationKeyPath);
-    if(timestamp) {
-      return this.getKeyRevocationStateAtDate(revocationKeyPath, timestamp);
+    if(options && options.timestamp) {
+      return this.getKeyRevocationStateAtDate(revocationKeyPath, options.timestamp);
     } else {
-      return this.registry.isRevoked(revocationKeyPath.namespace, revocationKeyPath.list, revocationKeyPath.revocationKey);
+      let blockTag = options && options.blockTag ? options.blockTag : "latest"
+      const result = await this.registry.isRevoked(revocationKeyPath.namespace, revocationKeyPath.list, revocationKeyPath.revocationKey, {blockTag: blockTag});
+      if(result === undefined) {
+        throw new Error(`Revocation couldn't be fetched for ${blockTag}`)
+      }
+      return result;
     }
   }
 

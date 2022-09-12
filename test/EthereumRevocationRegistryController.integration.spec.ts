@@ -55,16 +55,15 @@ describe('EthrRevocationRegistryController', () => {
 
   it('revokes key, unrevokes & checks status in the past correctly', async () => {
     await controller.changeStatus(true, generateRevocationKeyPathForAccount(accounts[0]))
-    await sleepForMs(2000)
+    await sleepForMs(1000)
     const revokedDate = new Date()
-    await sleepForMs(2000)
+    await sleepForMs(1000)
     await controller.changeStatus(false, generateRevocationKeyPathForAccount(accounts[0]))
-    await sleepForMs(2000)
+    await sleepForMs(1000)
     const unrevokedDate = new Date()
-    await sleepForMs(2000)
-    await expect(controller.isRevoked(generateRevocationKeyPathForAccount(accounts[0]), revokedDate)).resolves.toEqual(true)
-    await expect(controller.isRevoked(generateRevocationKeyPathForAccount(accounts[0]), unrevokedDate)).resolves.toEqual(false)
-    console.log("asd")
+    await sleepForMs(1000)
+    await expect(controller.isRevoked(generateRevocationKeyPathForAccount(accounts[0]), {timestamp: revokedDate} )).resolves.toEqual(true)
+    await expect(controller.isRevoked(generateRevocationKeyPathForAccount(accounts[0]), {timestamp: unrevokedDate})).resolves.toEqual(false)
   })
 
 })
