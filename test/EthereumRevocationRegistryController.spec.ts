@@ -800,6 +800,12 @@ describe('EthrRevocationRegistryController', () => {
       expect(registryContractMock.addListDelegate).toHaveBeenCalledTimes(1);
       expect(registryContractMock.addListDelegate).toHaveBeenCalledWith(validAddress, revocationListPath.namespace, revocationListPath.list, expiryDateInSeconds);
     })
+    it('should notice null revocationListPath', async () => {
+      const expiryDate = GetDateForTodayPlusDays(5);
+
+      expect(registry.addListDelegate(undefined as any, validAddress, expiryDate)).rejects.toThrow(Error);
+      expect(registryContractMock.addListDelegate).toHaveBeenCalledTimes(0);
+    })
     describe('namespace in revocationListPath', () => {
       it('should notice emptiness', async () => {
         const revocationListPath: RevocationListPath = {
@@ -845,6 +851,16 @@ describe('EthrRevocationRegistryController', () => {
         expect(registry.addListDelegate(revocationListPath, validAddress, expiryDate)).rejects.toThrow(Error);
         expect(registryContractMock.addListDelegate).toHaveBeenCalledTimes(0);
       })
+      it('should notice non-hex bytes32', async () => {
+        const revocationListPath: RevocationListPath = {
+          namespace: validAddress,
+          list: "0x3ac225168df54212a25c1c01fd35bebfea408fdac2e31ddd6f80a4bbf9a5f1cz",
+        }
+        const expiryDate = GetDateForTodayPlusDays(5);
+
+        expect(registry.addListDelegate(revocationListPath, validAddress, expiryDate)).rejects.toThrow(Error);
+        expect(registryContractMock.addListDelegate).toHaveBeenCalledTimes(0);
+      })
     })
     describe('for delegate', () => {
       it('should notice emptiness', async () => {
@@ -877,6 +893,15 @@ describe('EthrRevocationRegistryController', () => {
         const expiryDate = GetDateForTodayPlusDays(-5);
 
         expect(registry.addListDelegate(revocationListPath, validAddress, expiryDate)).rejects.toThrow(Error);
+        expect(registryContractMock.addListDelegate).toHaveBeenCalledTimes(0);
+      })
+      it('should notice null date', async () => {
+        const revocationListPath: RevocationListPath = {
+          namespace: validAddress,
+          list: web3.utils.keccak256("listname"),
+        }
+
+        expect(registry.addListDelegate(revocationListPath, validAddress, undefined as any)).rejects.toThrow(Error);
         expect(registryContractMock.addListDelegate).toHaveBeenCalledTimes(0);
       })
     })
