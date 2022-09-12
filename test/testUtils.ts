@@ -105,11 +105,15 @@ export function GetDateForTodayPlusDays(numberOfDays: number): Date {
   const currentDate = new Date();
   let expiryDateInSeconds;
   if(numberOfDays < 0) {
-    expiryDateInSeconds = currentDate.getTime()-(5*24*60*60)
+    expiryDateInSeconds = currentDate.getTime()-(Math.abs(numberOfDays)*24*60*60*1000)
   } else {
-    expiryDateInSeconds = currentDate.getTime()+(5*24*60*60)
+    expiryDateInSeconds = currentDate.getTime()+(numberOfDays*24*60*60*1000)
   }
   const expiryDate = new Date();
   expiryDate.setTime(expiryDateInSeconds);
   return expiryDate;
+}
+
+export function sleepForMs(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }

@@ -1,6 +1,6 @@
 {
   "name": "@spherity/ethr-revocation-registry-controller",
-  "version": "1.1.1",
+  "version": "1.2.1",
   "description": "The controller module for interacting with Ethereum revocation lists & resolving revocation entries for EIP-5539.",
   "main": "dist/src/index.js",
   "typings": "dist/src/index.d.ts",
@@ -39,8 +39,10 @@
   "homepage": "https://github.com/spherity/Ethereum-Revocation-Registry-Controller#readme",
   "devDependencies": {
     "@types/jest": "^28.0.8",
+    "@types/jest-when": "^3.5.2",
     "@types/node": "^18.7.14",
     "ganache": "^7.4.1",
+    "jest-when": "^3.5.1",
     "ts-jest": "^28.0.8",
     "ts-node": "^10.9.1",
     "typescript": "^4.8.2"
