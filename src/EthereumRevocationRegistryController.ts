@@ -103,7 +103,7 @@ export class EthereumRevocationRegistryController {
   }
 
   private async getTimestampedEventsUntilDate(events: Array<TypedEvent>, timestamp: Date): Promise<Array<TimestampedEvent>> {
-    const timestampSeconds = timestamp.getTime()/1000;
+    const timestampSeconds = Math.floor(timestamp.getTime()/1000);
     let timestampedEvents = await Promise.all(events.map(async (event) => {
       const block: Block = await event.getBlock()
       if(block.timestamp <= timestampSeconds) {
