@@ -1,4 +1,4 @@
-import {factories, RevocationRegistry} from "@spherity/ethr-revocation-registry/types/ethers-contracts";
+import {RevocationRegistry} from "@spherity/ethr-revocation-registry/types/ethers-v5";
 import {
   EthereumRevocationRegistryController,
   RevocationKeyInstruction,
@@ -7,10 +7,10 @@ import {
 } from "../src";
 import {Signer} from "@ethersproject/abstract-signer";
 import web3 from "web3";
-import {createProvider, GetDateForTodayPlusDays} from "./testUtils";
+import {GetDateForTodayPlusDays} from "./testUtils";
 import {when} from 'jest-when'
-import {TypedEvent} from "@spherity/ethr-revocation-registry/types/ethers-contracts/common";
 import {Block} from "@ethersproject/abstract-provider";
+import {TypedEvent} from "@spherity/ethr-revocation-registry/types/ethers-v5/common";
 
 jest.setTimeout(30000)
 

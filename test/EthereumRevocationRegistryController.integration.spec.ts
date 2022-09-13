@@ -1,5 +1,5 @@
-import {createProvider, sleep, sleepForMs, startMining, stopMining} from './testUtils'
-import {RevocationRegistry, factories} from "@spherity/ethr-revocation-registry/types/ethers-contracts";
+import {createProvider, sleepForMs} from './testUtils'
+import {RevocationRegistry, factories} from "@spherity/ethr-revocation-registry/types/ethers-v5";
 import {EthereumRevocationRegistryController, RevocationKeyPath} from "../src";
 
 jest.setTimeout(30000)
