@@ -1,7 +1,7 @@
 /**
  * A class that can be used to interact with the EIP-5539 contract on behalf of a local controller key-pair
  */
-import {RevocationRegistry, factories} from "@spherity/ethr-revocation-registry/types/ethers-contracts";
+import {RevocationRegistry, factories} from "@spherity/ethr-revocation-registry/types/ethers-v5";
 import {BlockTag, JsonRpcProvider, Provider} from "@ethersproject/providers";
 import {Signer} from "@ethersproject/abstract-signer";
 import {ContractTransaction} from "@ethersproject/contracts";
@@ -10,12 +10,8 @@ import {RevocationListPath} from "./types/RevocationListPath";
 import {RevocationKeyInstruction} from "./types/RevocationKeyInstruction";
 import {RevocationKeyPath} from "./types/RevocationKeyPath";
 import {isEmpty} from "lodash";
-import {
-  ListStatusChangedEvent,
-  RevocationStatusChangedEvent
-} from "@spherity/ethr-revocation-registry/types/ethers-contracts/RevocationRegistry";
 import {Block} from "@ethersproject/abstract-provider";
-import {TypedEvent} from "@spherity/ethr-revocation-registry/types/ethers-contracts/common";
+import {TypedEvent} from "@spherity/ethr-revocation-registry/types/ethers-v5/common";
 
 export const DEFAULT_REGISTRY_ADDRESS = '0x00000000000000000000000'
 
