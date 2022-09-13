@@ -122,7 +122,7 @@ export class EthereumRevocationRegistryController {
     let queryFilterReturnValues;
     try {
       queryFilterReturnValues = await Promise.all([
-        this.registry.queryFilter(this.registry.filters.ListStatusChanged()),
+        this.registry.queryFilter(this.registry.filters.RevocationListStatusChanged()),
         this.registry.queryFilter(this.registry.filters.RevocationStatusChanged()),
       ]);
     } catch(error) {

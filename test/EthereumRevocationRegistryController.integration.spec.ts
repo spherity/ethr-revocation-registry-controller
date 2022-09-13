@@ -62,7 +62,7 @@ describe('EthrRevocationRegistryController', () => {
     await sleepForMs(1000)
     const unrevokedDate = new Date()
     await sleepForMs(1000)
-    await expect(controller.isRevoked(generateRevocationKeyPathForAccount(accounts[0]), {timestamp: revokedDate} )).resolves.toEqual(true)
+    await expect(controller.isRevoked(generateRevocationKeyPathForAccount(accounts[0]), {timestamp: revokedDate})).resolves.toEqual(true)
     await expect(controller.isRevoked(generateRevocationKeyPathForAccount(accounts[0]), {timestamp: unrevokedDate})).resolves.toEqual(false)
   })
 

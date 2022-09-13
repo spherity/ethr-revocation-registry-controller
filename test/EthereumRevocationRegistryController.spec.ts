@@ -28,7 +28,7 @@ describe('EthrRevocationRegistryController', () => {
     removeListDelegate: jest.fn(),
     queryFilter: jest.fn(),
     filters: {
-      ListStatusChanged: jest.fn(),
+      RevocationListStatusChanged: jest.fn(),
       RevocationStatusChanged: jest.fn(),
     }
   } as unknown as RevocationRegistry;
@@ -97,7 +97,7 @@ describe('EthrRevocationRegistryController', () => {
 
         const timestamp = GetDateForTodayPlusDays(-5);
 
-        when(registryContractMock.filters.ListStatusChanged).mockReturnValue("mockedListStatusIdentifier" as any)
+        when(registryContractMock.filters.RevocationListStatusChanged).mockReturnValue("mockedListStatusIdentifier" as any)
         when(registryContractMock.filters.RevocationStatusChanged).mockReturnValue("mockedKeyStatusIdentifier" as any)
 
         const typedListStatusEvent = {
@@ -133,7 +133,7 @@ describe('EthrRevocationRegistryController', () => {
 
         const timestamp = GetDateForTodayPlusDays(-5);
 
-        when(registryContractMock.filters.ListStatusChanged).mockReturnValue("mockedListStatusIdentifier" as any)
+        when(registryContractMock.filters.RevocationListStatusChanged).mockReturnValue("mockedListStatusIdentifier" as any)
         when(registryContractMock.filters.RevocationStatusChanged).mockReturnValue("mockedKeyStatusIdentifier" as any)
 
         const typedListStatusEvent = {
@@ -169,7 +169,7 @@ describe('EthrRevocationRegistryController', () => {
 
         const timestamp = GetDateForTodayPlusDays(-5);
 
-        when(registryContractMock.filters.ListStatusChanged).mockReturnValue("mockedListStatusIdentifier" as any)
+        when(registryContractMock.filters.RevocationListStatusChanged).mockReturnValue("mockedListStatusIdentifier" as any)
         when(registryContractMock.filters.RevocationStatusChanged).mockReturnValue("mockedKeyStatusIdentifier" as any)
 
         const revokedTimestamp = Math.floor(GetDateForTodayPlusDays(-4).getTime()/1000);
@@ -221,7 +221,7 @@ describe('EthrRevocationRegistryController', () => {
 
         const timestamp = GetDateForTodayPlusDays(-5);
 
-        when(registryContractMock.filters.ListStatusChanged).mockReturnValue({address: "", topics: [""]})
+        when(registryContractMock.filters.RevocationListStatusChanged).mockReturnValue({address: "", topics: [""]})
         when(registryContractMock.filters.RevocationStatusChanged).mockReturnValue({address: "", topics: [""]})
         when(registryContractMock.queryFilter).calledWith({
           address: "",
