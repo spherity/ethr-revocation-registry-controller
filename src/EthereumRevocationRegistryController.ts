@@ -239,8 +239,7 @@ export class EthereumRevocationRegistryController {
     }
 
     const signature = await this.signer._signTypedData(this.typedDataDomain, EIP712ChangeStatusType, values)
-
-
+    
     return {
       revoked: revoked,
       revocationKeyPath: revocationKeyPath,
