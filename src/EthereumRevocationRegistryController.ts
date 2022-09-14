@@ -1,9 +1,9 @@
 /**
  * A class that can be used to interact with the EIP-5539 contract on behalf of a local controller key-pair
  */
-import {RevocationRegistry, factories} from "@spherity/ethr-revocation-registry/types/ethers-v5";
+import {factories, RevocationRegistry} from "@spherity/ethr-revocation-registry/types/ethers-v5";
 import {BlockTag, JsonRpcProvider, Provider} from "@ethersproject/providers";
-import {Signer} from "@ethersproject/abstract-signer";
+import {Signer, TypedDataDomain} from "@ethersproject/abstract-signer";
 import {ContractTransaction} from "@ethersproject/contracts";
 import web3 from "web3";
 import {RevocationListPath} from "./types/RevocationListPath";
@@ -12,6 +12,9 @@ import {RevocationKeyPath} from "./types/RevocationKeyPath";
 import {isEmpty} from "lodash";
 import {Block} from "@ethersproject/abstract-provider";
 import {TypedEvent} from "@spherity/ethr-revocation-registry/types/ethers-v5/common";
+import {EIP712ChangeStatusType} from "@spherity/ethr-revocation-registry";
+import {TypedDataSigner} from "@ethersproject/abstract-signer/src.ts";
+import {BigNumber} from "@ethersproject/bignumber";
 
 export const DEFAULT_REGISTRY_ADDRESS = '0x00000000000000000000000'
 
@@ -19,10 +22,21 @@ type TimestampedEvent = TypedEvent & {
   timestamp: number
 }
 
+export type Signaturish =  {
+  signer: string
+  signature: string
+  nonce: BigNumber
+}
+
+export type ChangeStatusSignedOperation = Signaturish & {
+  revoked: boolean
+  revocationKeyPath: RevocationKeyPath
+}
+
 export interface EthereumRevocationRegistryControllerConfig {
   contract?: RevocationRegistry,
   provider?: Provider,
-  signer?: Signer,
+  signer?: Signer & TypedDataSigner,
   rpcUrl?: string,
   chainNameOrId?: string,
   address?: string;
@@ -35,8 +49,9 @@ export interface IsRevokedOptions {
 
 export class EthereumRevocationRegistryController {
   private registry: RevocationRegistry
-  private signer?: Signer
+  private signer?: Signer & TypedDataSigner
   private address: string
+  private typedDataDomain: TypedDataDomain | undefined
 
   constructor(config: EthereumRevocationRegistryControllerConfig) {
     const address = config.address !== undefined ? config.address : DEFAULT_REGISTRY_ADDRESS;
@@ -58,6 +73,32 @@ export class EthereumRevocationRegistryController {
     }
     this.signer = config.signer
     this.address = address
+  }
+
+  private async getEip712Domain(): Promise<TypedDataDomain> {
+    const versionMajor = await this.registry.VERSION_MAJOR
+    const version = await this.registry.version()
+    const network = await this.registry.provider.getNetwork()
+    const chainId = network.chainId
+
+    return {
+      name: "Revocation Registry",
+      version: version,
+      chainId: chainId,
+      verifyingContract: this.address
+    } as TypedDataDomain
+  }
+
+  private validateSignaturish(signaturish: Signaturish) {
+    this.validateAddress(signaturish.signer)
+    this.validateSignature(signaturish.signature)
+    if(!signaturish.nonce) throw new Error("Nonce must be set")
+  }
+
+  private validateSignature(signature: string) {
+    if(!web3.utils.isHexStrict(signature)) {
+      throw new Error(`Supplied signature '${signature}' is not valid (notice: must start with 0x prefix; must contain only HEX character set)`)
+    }
   }
 
   private validateAddress(address: string) {
@@ -157,6 +198,56 @@ export class EthereumRevocationRegistryController {
   async changeStatus(revoked: boolean, revocationKeyPath: RevocationKeyPath): Promise<ContractTransaction> {
     this.validateRevocationKeyPath(revocationKeyPath);
     return this.registry.changeStatus(revoked, revocationKeyPath.namespace, revocationKeyPath.list, revocationKeyPath.revocationKey);
+  }
+
+  async changeStatusSigned(signedOperation: ChangeStatusSignedOperation) {
+    if(signedOperation.revoked === undefined) throw new Error("revoked must be set")
+    this.validateSignaturish(signedOperation)
+    this.validateRevocationKeyPath(signedOperation.revocationKeyPath)
+    const nonce = await this.registry.nonces(signedOperation.signer)
+    if(!nonce.eq(signedOperation.nonce)) {
+      throw new Error(`Nonce in the payload is out of date or invalid (Expected: '${signedOperation.nonce}' ; Current: '${nonce}'). Has the payload already been used?`)
+    }
+
+    const revocationKeyPath = signedOperation.revocationKeyPath
+    return this.registry.changeStatusSigned(
+        signedOperation.revoked,
+        revocationKeyPath.namespace,
+        revocationKeyPath.list,
+        revocationKeyPath.revocationKey,
+        signedOperation.signer,
+        signedOperation.signature,
+    )
+  }
+
+  async generateChangeStatusSignedPayload(revoked: boolean, revocationKeyPath: RevocationKeyPath): Promise<ChangeStatusSignedOperation> {
+    if(!this.typedDataDomain) {
+      this.typedDataDomain = await this.getEip712Domain()
+    }
+    if(!this.signer) throw new Error("Please provide a signer in the constructor as it is required for the method to work!")
+    this.validateRevocationKeyPath(revocationKeyPath)
+    const signer = await this.signer.getAddress()
+    const nonce = await this.registry.nonces(signer)
+
+    const values = {
+      revoked: revoked,
+      namespace: revocationKeyPath.namespace,
+      revocationList: revocationKeyPath.list,
+      revocationKey: revocationKeyPath.revocationKey,
+      signer: signer,
+      nonce: nonce.toNumber()
+    }
+
+    const signature = await this.signer._signTypedData(this.typedDataDomain, EIP712ChangeStatusType, values)
+
+
+    return {
+      revoked: revoked,
+      revocationKeyPath: revocationKeyPath,
+      signer: signer,
+      signature: signature,
+      nonce: nonce
+    } as ChangeStatusSignedOperation
   }
 
   async changeStatusDelegated(revoked: boolean, revocationKeyPath: RevocationKeyPath): Promise<ContractTransaction> {

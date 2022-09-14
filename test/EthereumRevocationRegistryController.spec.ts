@@ -11,6 +11,7 @@ import {GetDateForTodayPlusDays} from "./testUtils";
 import {when} from 'jest-when'
 import {Block} from "@ethersproject/abstract-provider";
 import {TypedEvent} from "@spherity/ethr-revocation-registry/types/ethers-v5/common";
+import {TypedDataSigner} from "@ethersproject/abstract-signer/src.ts";
 
 jest.setTimeout(30000)
 
@@ -35,7 +36,7 @@ describe('EthrRevocationRegistryController', () => {
 
   const signerMock = {
 
-  } as unknown as Signer;
+  } as unknown as Signer & TypedDataSigner;
   const addressMock = "";
 
   beforeAll(async () => {
