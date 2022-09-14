@@ -46,13 +46,14 @@ export class EthereumRevocationRegistryController {
       let prov = config.provider || config.signer?.provider
       if(!prov && config.rpcUrl) {
         prov = new JsonRpcProvider(config.rpcUrl, config.chainNameOrId || 'any')
-      } else {
+      }
+      if (!prov && !config.rpcUrl) {
         throw new Error("Provider and/org rpcUrl required if contract isn't specified!")
       }
       this.validateAddress(address);
       this.registry = new factories.RevocationRegistry__factory()
         .attach(address || DEFAULT_REGISTRY_ADDRESS)
-        .connect(prov)
+        .connect(prov!)
     } else {
       throw new Error("Either a contract instance or a provider or rpcUrl is required to initialize!")
     }
