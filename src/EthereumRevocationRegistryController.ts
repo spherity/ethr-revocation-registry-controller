@@ -200,7 +200,7 @@ export class EthereumRevocationRegistryController {
     return this.registry.changeStatus(revoked, revocationKeyPath.namespace, revocationKeyPath.list, revocationKeyPath.revocationKey);
   }
 
-  async changeStatusSigned(signedOperation: ChangeStatusSignedOperation) {
+  async changeStatusSigned(signedOperation: ChangeStatusSignedOperation): Promise<ContractTransaction> {
     if(signedOperation.revoked === undefined) throw new Error("revoked must be set")
     this.validateSignaturish(signedOperation)
     this.validateRevocationKeyPath(signedOperation.revocationKeyPath)
