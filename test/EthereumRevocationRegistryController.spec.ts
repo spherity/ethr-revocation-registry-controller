@@ -11,6 +11,9 @@ import {GetDateForTodayPlusDays} from "./testUtils";
 import {when} from 'jest-when'
 import {Block} from "@ethersproject/abstract-provider";
 import {TypedEvent} from "@spherity/ethr-revocation-registry/types/ethers-v5/common";
+import {TypedDataSigner} from "@ethersproject/abstract-signer";
+import {ChangeStatusSignedOperation} from "../dist/src/EthereumRevocationRegistryController";
+import {BigNumber} from "@ethersproject/bignumber";
 
 jest.setTimeout(30000)
 
@@ -20,6 +23,7 @@ describe('EthrRevocationRegistryController', () => {
   const registryContractMock = {
     isRevoked: jest.fn(),
     changeStatus: jest.fn(),
+    changeStatusSigned: jest.fn(),
     changeStatusDelegated: jest.fn(),
     changeStatusesInList: jest.fn(),
     changeStatusesInListDelegated: jest.fn(),
@@ -28,14 +32,15 @@ describe('EthrRevocationRegistryController', () => {
     removeListDelegate: jest.fn(),
     queryFilter: jest.fn(),
     filters: {
-      ListStatusChanged: jest.fn(),
+      RevocationListStatusChanged: jest.fn(),
       RevocationStatusChanged: jest.fn(),
-    }
+    },
+    nonces: jest.fn()
   } as unknown as RevocationRegistry;
 
   const signerMock = {
 
-  } as unknown as Signer;
+  } as unknown as Signer & TypedDataSigner;
   const addressMock = "";
 
   beforeAll(async () => {
@@ -97,7 +102,7 @@ describe('EthrRevocationRegistryController', () => {
 
         const timestamp = GetDateForTodayPlusDays(-5);
 
-        when(registryContractMock.filters.ListStatusChanged).mockReturnValue("mockedListStatusIdentifier" as any)
+        when(registryContractMock.filters.RevocationListStatusChanged).mockReturnValue("mockedListStatusIdentifier" as any)
         when(registryContractMock.filters.RevocationStatusChanged).mockReturnValue("mockedKeyStatusIdentifier" as any)
 
         const typedListStatusEvent = {
@@ -133,7 +138,7 @@ describe('EthrRevocationRegistryController', () => {
 
         const timestamp = GetDateForTodayPlusDays(-5);
 
-        when(registryContractMock.filters.ListStatusChanged).mockReturnValue("mockedListStatusIdentifier" as any)
+        when(registryContractMock.filters.RevocationListStatusChanged).mockReturnValue("mockedListStatusIdentifier" as any)
         when(registryContractMock.filters.RevocationStatusChanged).mockReturnValue("mockedKeyStatusIdentifier" as any)
 
         const typedListStatusEvent = {
@@ -169,7 +174,7 @@ describe('EthrRevocationRegistryController', () => {
 
         const timestamp = GetDateForTodayPlusDays(-5);
 
-        when(registryContractMock.filters.ListStatusChanged).mockReturnValue("mockedListStatusIdentifier" as any)
+        when(registryContractMock.filters.RevocationListStatusChanged).mockReturnValue("mockedListStatusIdentifier" as any)
         when(registryContractMock.filters.RevocationStatusChanged).mockReturnValue("mockedKeyStatusIdentifier" as any)
 
         const revokedTimestamp = Math.floor(GetDateForTodayPlusDays(-4).getTime()/1000);
@@ -221,7 +226,7 @@ describe('EthrRevocationRegistryController', () => {
 
         const timestamp = GetDateForTodayPlusDays(-5);
 
-        when(registryContractMock.filters.ListStatusChanged).mockReturnValue({address: "", topics: [""]})
+        when(registryContractMock.filters.RevocationListStatusChanged).mockReturnValue({address: "", topics: [""]})
         when(registryContractMock.filters.RevocationStatusChanged).mockReturnValue({address: "", topics: [""]})
         when(registryContractMock.queryFilter).calledWith({
           address: "",
@@ -442,6 +447,270 @@ describe('EthrRevocationRegistryController', () => {
         }
         expect(registry.changeStatusDelegated(true, revocationKeyPath)).rejects.toThrow(Error);
         expect(registryContractMock.changeStatusDelegated).toHaveBeenCalledTimes(0);
+      })
+    })
+  })
+
+  describe('changeStatusSigned input verification', () => {
+    it('should let valid parameters pass', async () => {
+      const revocationKeyPath: RevocationKeyPath = {
+        namespace: validAddress,
+        list: web3.utils.keccak256("listname"),
+        revocationKey: web3.utils.keccak256("revocationKey")
+      }
+      const changeStatusSignedOperation = {
+        revoked: true,
+        revocationKeyPath: revocationKeyPath,
+        signer: validAddress,
+        signature: web3.utils.keccak256("mockedSignature"),
+        nonce: BigNumber.from(0)
+      } as ChangeStatusSignedOperation
+
+      when(registryContractMock.nonces).calledWith(changeStatusSignedOperation.signer).mockResolvedValue(BigNumber.from(0))
+      await registry.changeStatusSigned(changeStatusSignedOperation);
+      expect(registryContractMock.changeStatusSigned).toHaveBeenCalledWith(
+        changeStatusSignedOperation.revoked,
+        changeStatusSignedOperation.revocationKeyPath.namespace,
+        changeStatusSignedOperation.revocationKeyPath.list,
+        changeStatusSignedOperation.revocationKeyPath.revocationKey,
+        changeStatusSignedOperation.signer,
+        changeStatusSignedOperation.signature
+      );
+      expect(registryContractMock.nonces).toHaveBeenCalledTimes(1);
+      expect(registryContractMock.changeStatusSigned).toHaveBeenCalledTimes(1);
+    })
+
+    describe('signature in signaturish in changeStatusSignedOperation', () => {
+      it('should notice emptiness', async () => {
+        const revocationKeyPath: RevocationKeyPath = {
+          namespace: validAddress,
+          list: web3.utils.keccak256("listname"),
+          revocationKey: web3.utils.keccak256("revocationKey")
+        }
+        const changeStatusSignedOperation = {
+          revoked: true,
+          revocationKeyPath: revocationKeyPath,
+          signer: validAddress,
+          signature: "",
+          nonce: BigNumber.from(0)
+        } as ChangeStatusSignedOperation
+
+        when(registryContractMock.nonces).calledWith(changeStatusSignedOperation.signer).mockResolvedValue(BigNumber.from(0))
+        expect(registry.changeStatusSigned(changeStatusSignedOperation)).rejects.toThrow(Error);
+        expect(registryContractMock.changeStatusSigned).toHaveBeenCalledTimes(0);
+      })
+      it('should notice invalid hex', async () => {
+        const revocationKeyPath: RevocationKeyPath = {
+          namespace: validAddress,
+          list: web3.utils.keccak256("listname"),
+          revocationKey: web3.utils.keccak256("revocationKey")
+        }
+        const changeStatusSignedOperation = {
+          revoked: true,
+          revocationKeyPath: revocationKeyPath,
+          signer: validAddress,
+          signature: "asd",
+          nonce: BigNumber.from(0)
+        } as ChangeStatusSignedOperation
+
+        when(registryContractMock.nonces).calledWith(changeStatusSignedOperation.signer).mockResolvedValue(BigNumber.from(0))
+        expect(registry.changeStatusSigned(changeStatusSignedOperation)).rejects.toThrow(Error);
+        expect(registryContractMock.changeStatusSigned).toHaveBeenCalledTimes(0);
+      })
+    })
+
+    describe('signer in signaturish in changeStatusSignedOperation', () => {
+      it('should notice emptiness', async () => {
+        const revocationKeyPath: RevocationKeyPath = {
+          namespace: validAddress,
+          list: web3.utils.keccak256("listname"),
+          revocationKey: web3.utils.keccak256("revocationKey")
+        }
+        const changeStatusSignedOperation = {
+          revoked: true,
+          revocationKeyPath: revocationKeyPath,
+          signer: validAddress,
+          signature: "",
+          nonce: BigNumber.from(0)
+        } as ChangeStatusSignedOperation
+
+        when(registryContractMock.nonces).calledWith(changeStatusSignedOperation.signer).mockResolvedValue(BigNumber.from(0))
+        expect(registry.changeStatusSigned(changeStatusSignedOperation)).rejects.toThrow(Error);
+        expect(registryContractMock.changeStatusSigned).toHaveBeenCalledTimes(0);
+      })
+      it('should notice invalid hex', async () => {
+        const revocationKeyPath: RevocationKeyPath = {
+          namespace: validAddress,
+          list: web3.utils.keccak256("listname"),
+          revocationKey: web3.utils.keccak256("revocationKey")
+        }
+        const changeStatusSignedOperation = {
+          revoked: true,
+          revocationKeyPath: revocationKeyPath,
+          signer: web3.utils.keccak256("invalidAddress"),
+          signature: web3.utils.keccak256("mockedSignature"),
+          nonce: BigNumber.from(0)
+        } as ChangeStatusSignedOperation
+
+        when(registryContractMock.nonces).calledWith(changeStatusSignedOperation.signer).mockResolvedValue(BigNumber.from(0))
+        expect(registry.changeStatusSigned(changeStatusSignedOperation)).rejects.toThrow(Error);
+        expect(registryContractMock.changeStatusSigned).toHaveBeenCalledTimes(0);
+      })
+    })
+
+    describe('nonce in signaturish in changeStatusSignedOperation', () => {
+      it('should notice emptiness', async () => {
+        const revocationKeyPath: RevocationKeyPath = {
+          namespace: validAddress,
+          list: web3.utils.keccak256("listname"),
+          revocationKey: web3.utils.keccak256("revocationKey")
+        }
+        const changeStatusSignedOperation = {
+          revoked: true,
+          revocationKeyPath: revocationKeyPath,
+          signer: validAddress,
+          signature: "",
+          nonce: undefined as any
+        } as ChangeStatusSignedOperation
+
+        when(registryContractMock.nonces).calledWith(changeStatusSignedOperation.signer).mockResolvedValue(BigNumber.from(0))
+        expect(registry.changeStatusSigned(changeStatusSignedOperation)).rejects.toThrow(Error);
+        expect(registryContractMock.changeStatusSigned).toHaveBeenCalledTimes(0);
+      })
+      it('should notice out of date nonce', async () => {
+        const revocationKeyPath: RevocationKeyPath = {
+          namespace: validAddress,
+          list: web3.utils.keccak256("listname"),
+          revocationKey: web3.utils.keccak256("revocationKey")
+        }
+        const changeStatusSignedOperation = {
+          revoked: true,
+          revocationKeyPath: revocationKeyPath,
+          signer: validAddress,
+          signature: "",
+          nonce: BigNumber.from(0)
+        } as ChangeStatusSignedOperation
+
+        when(registryContractMock.nonces).calledWith(changeStatusSignedOperation.signer).mockResolvedValue(BigNumber.from(1))
+        expect(registry.changeStatusSigned(changeStatusSignedOperation)).rejects.toThrow(Error);
+        expect(registryContractMock.changeStatusSigned).toHaveBeenCalledTimes(0);
+      })
+    })
+
+    describe('namespace in revocationKeyPath in changeStatusSignedOperation', () => {
+      it('should notice emptiness', async () => {
+        const revocationKeyPath: RevocationKeyPath = {
+          namespace: "",
+          list: web3.utils.keccak256("listname"),
+          revocationKey: web3.utils.keccak256("revocationKey")
+        }
+        const changeStatusSignedOperation = {
+          revoked: true,
+          revocationKeyPath: revocationKeyPath,
+          signer: validAddress,
+          signature: web3.utils.keccak256("mockedSignature"),
+          nonce: BigNumber.from(0)
+        } as ChangeStatusSignedOperation
+
+        when(registryContractMock.nonces).calledWith(changeStatusSignedOperation.signer).mockResolvedValue(BigNumber.from(0))
+        expect(registry.changeStatusSigned(changeStatusSignedOperation)).rejects.toThrow(Error);
+        expect(registryContractMock.changeStatusSigned).toHaveBeenCalledTimes(0);
+      })
+      it('should notice invalid address', async () => {
+        const revocationKeyPath: RevocationKeyPath = {
+          namespace: web3.utils.keccak256("invalidaddress"),
+          list: web3.utils.keccak256("listname"),
+          revocationKey: web3.utils.keccak256("revocationKey")
+        }
+        const changeStatusSignedOperation = {
+          revoked: true,
+          revocationKeyPath: revocationKeyPath,
+          signer: validAddress,
+          signature: web3.utils.keccak256("mockedSignature"),
+          nonce: BigNumber.from(0)
+        } as ChangeStatusSignedOperation
+
+        when(registryContractMock.nonces).calledWith(changeStatusSignedOperation.signer).mockResolvedValue(BigNumber.from(0))
+        expect(registry.changeStatusSigned(changeStatusSignedOperation)).rejects.toThrow(Error);
+        expect(registryContractMock.changeStatusSigned).toHaveBeenCalledTimes(0);
+      })
+    })
+
+    describe('list in revocationKeyPath in changeStatusSignedOperation', () => {
+      it('should notice emptiness', async () => {
+        const revocationKeyPath: RevocationKeyPath = {
+          namespace: validAddress,
+          list: "",
+          revocationKey: web3.utils.keccak256("revocationKey")
+        }
+        const changeStatusSignedOperation = {
+          revoked: true,
+          revocationKeyPath: revocationKeyPath,
+          signer: validAddress,
+          signature: web3.utils.keccak256("mockedSignature"),
+          nonce: BigNumber.from(0)
+        } as ChangeStatusSignedOperation
+
+        when(registryContractMock.nonces).calledWith(changeStatusSignedOperation.signer).mockResolvedValue(BigNumber.from(0))
+        expect(registry.changeStatusSigned(changeStatusSignedOperation)).rejects.toThrow(Error);
+        expect(registryContractMock.changeStatusSigned).toHaveBeenCalledTimes(0);
+      })
+      it('should notice invalid bytes32', async () => {
+        const revocationKeyPath: RevocationKeyPath = {
+          namespace: validAddress,
+          list: validAddress,
+          revocationKey: web3.utils.keccak256("revocationKey")
+        }
+        const changeStatusSignedOperation = {
+          revoked: true,
+          revocationKeyPath: revocationKeyPath,
+          signer: validAddress,
+          signature: web3.utils.keccak256("mockedSignature"),
+          nonce: BigNumber.from(0)
+        } as ChangeStatusSignedOperation
+
+        when(registryContractMock.nonces).calledWith(changeStatusSignedOperation.signer).mockResolvedValue(BigNumber.from(0))
+        expect(registry.changeStatusSigned(changeStatusSignedOperation)).rejects.toThrow(Error);
+        expect(registryContractMock.changeStatusSigned).toHaveBeenCalledTimes(0);
+      })
+    })
+
+    describe('revocationKey in revocationKeyPath in changeStatusSignedOperation', () => {
+      it('should notice emptiness', async () => {
+        const revocationKeyPath: RevocationKeyPath = {
+          namespace: validAddress,
+          list: web3.utils.keccak256("revocationList"),
+          revocationKey: ""
+        }
+        const changeStatusSignedOperation = {
+          revoked: true,
+          revocationKeyPath: revocationKeyPath,
+          signer: validAddress,
+          signature: web3.utils.keccak256("mockedSignature"),
+          nonce: BigNumber.from(0)
+        } as ChangeStatusSignedOperation
+
+        when(registryContractMock.nonces).calledWith(changeStatusSignedOperation.signer).mockResolvedValue(BigNumber.from(0))
+        expect(registry.changeStatusSigned(changeStatusSignedOperation)).rejects.toThrow(Error);
+        expect(registryContractMock.changeStatusSigned).toHaveBeenCalledTimes(0);
+      })
+      it('should notice invalid bytes32', async () => {
+        const revocationKeyPath: RevocationKeyPath = {
+          namespace: validAddress,
+          list: web3.utils.keccak256("revocationList"),
+          revocationKey: validAddress
+        }
+        const changeStatusSignedOperation = {
+          revoked: true,
+          revocationKeyPath: revocationKeyPath,
+          signer: validAddress,
+          signature: web3.utils.keccak256("mockedSignature"),
+          nonce: BigNumber.from(0)
+        } as ChangeStatusSignedOperation
+
+        when(registryContractMock.nonces).calledWith(changeStatusSignedOperation.signer).mockResolvedValue(BigNumber.from(0))
+        expect(registry.changeStatusSigned(changeStatusSignedOperation)).rejects.toThrow(Error);
+        expect(registryContractMock.changeStatusSigned).toHaveBeenCalledTimes(0);
       })
     })
   })
