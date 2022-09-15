@@ -1,6 +1,6 @@
-import {createProvider, sleepForMs} from './testUtils'
+import {createProvider, GetDateForTodayPlusDays, sleepForMs} from './testUtils'
 import {RevocationRegistry, factories} from "@spherity/ethr-revocation-registry/types/ethers-v5";
-import {EthereumRevocationRegistryController, RevocationKeyPath} from "../src";
+import {EthereumRevocationRegistryController, RevocationKeyPath, RevocationListPath} from "../src";
 import {Wallet} from "@ethersproject/wallet";
 
 jest.setTimeout(30000)
@@ -17,6 +17,13 @@ describe('EthrRevocationRegistryController', () => {
       namespace: account,
       list: exampleList,
       revocationKey: exampleRevocationKey,
+    }
+  }
+
+  function generateRevocationListPathForAccount(account: string): RevocationListPath {
+    return {
+      namespace: account,
+      list: exampleList,
     }
   }
 
@@ -105,6 +112,44 @@ describe('EthrRevocationRegistryController', () => {
       expect(transaction2.wait()).resolves
 
       expect(controller.changeStatusSigned(payload1)).rejects.toThrow(Error)
+    });
+  });
+
+  describe('ChangeListStatusDelegated', () => {
+    it('Separate signer creates a signed payload for the initial controller to send out', async () => {
+      const signer = new Wallet("0x278a5de700e29faae8e40e366ec5012b5ec63d36ec77e8a2417154cc1d25383f")
+      signer.connect(web3Provider)
+      const typedDataSignableController = new EthereumRevocationRegistryController({
+        contract: registry,
+        provider: web3Provider,
+        signer: signer,
+        address: registry.address
+      })
+
+      const prepareTransaction = await typedDataSignableController.addListDelegate(generateRevocationListPathForAccount(signer.address), signer.address, GetDateForTodayPlusDays(5))
+      expect(prepareTransaction.wait()).resolves
+      const payload = await typedDataSignableController.generateChangeStatusDelegatedSignedPayload(true, generateRevocationKeyPathForAccount(signer.address))
+      const transaction = await controller.changeStatusDelegatedSigned(payload)
+      expect(transaction.wait()).resolves
+      await expect(controller.isRevoked(generateRevocationKeyPathForAccount(signer.address))).resolves.toEqual(true)
+    });
+  });
+
+  describe('ChangeListStatusSigned', () => {
+    it('Separate signer creates a signed payload for the initial controller to send out', async () => {
+      const signer = new Wallet("0x278a5de700e29faae8e40e366ec5012b5ec63d36ec77e8a2417154cc1d25383f")
+      signer.connect(web3Provider)
+      const typedDataSignableController = new EthereumRevocationRegistryController({
+        contract: registry,
+        provider: web3Provider,
+        signer: signer,
+        address: registry.address
+      })
+
+      const payload = await typedDataSignableController.generateChangeListStatusSignedPayload(true, generateRevocationListPathForAccount(signer.address))
+      const transaction = await controller.changeListStatusSigned(payload)
+      expect(transaction.wait()).resolves
+      await expect(controller.isRevoked(generateRevocationKeyPathForAccount(signer.address))).resolves.toEqual(true)
     });
   });
 })
