@@ -11,7 +11,7 @@ import {GetDateForTodayPlusDays} from "./testUtils";
 import {when} from 'jest-when'
 import {Block} from "@ethersproject/abstract-provider";
 import {TypedEvent} from "@spherity/ethr-revocation-registry/types/ethers-v5/common";
-import {TypedDataSigner} from "@ethersproject/abstract-signer/src.ts";
+import {TypedDataSigner} from "@ethersproject/abstract-signer";
 import {ChangeStatusSignedOperation} from "../dist/src/EthereumRevocationRegistryController";
 import {BigNumber} from "@ethersproject/bignumber";
 

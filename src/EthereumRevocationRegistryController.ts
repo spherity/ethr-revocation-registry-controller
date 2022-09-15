@@ -13,7 +13,7 @@ import {isEmpty} from "lodash";
 import {Block} from "@ethersproject/abstract-provider";
 import {TypedEvent} from "@spherity/ethr-revocation-registry/types/ethers-v5/common";
 import {EIP712ChangeStatusType} from "@spherity/ethr-revocation-registry";
-import {TypedDataSigner} from "@ethersproject/abstract-signer/src.ts";
+import {TypedDataSigner} from "@ethersproject/abstract-signer";
 import {BigNumber} from "@ethersproject/bignumber";
 
 export const DEFAULT_REGISTRY_ADDRESS = '0x00000000000000000000000'
