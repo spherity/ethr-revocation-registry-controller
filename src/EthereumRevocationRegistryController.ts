@@ -33,11 +33,6 @@ export type ChangeStatusSignedOperation = Signaturish & {
   revocationKeyPath: RevocationKeyPath
 }
 
-export type ChangeStatusDelegatedSignedOperation = Signaturish & {
-  revoked: boolean
-  revocationKeyPath: RevocationKeyPath
-}
-
 export interface EthereumRevocationRegistryControllerConfig {
   contract?: RevocationRegistry,
   provider?: Provider,
