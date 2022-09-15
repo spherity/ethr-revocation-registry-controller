@@ -96,7 +96,6 @@ describe('EthrRevocationRegistryController', () => {
       })
 
       const payload1 = await typedDataSignableController.generateChangeStatusSignedPayload(true, generateRevocationKeyPathForAccount(signer.address))
-      //payload.signature = "0x42226ea22060ddeda4cdae57670410ca84fc4a8fbdaf234b780460b12a8e04d706e2af7bfa43ae492e39f5a592566be3b3aae76f7cdd46183db22e162f09ac861c"
       const transaction1 = await controller.changeStatusSigned(payload1)
       expect(transaction1.wait()).resolves
 
