@@ -13,5 +13,9 @@ export {
 } from "./types/RevocationKeyPath"
 
 export {
+  RevocationKeysAndStatuses
+} from "./types/RevocationKeysAndStatuses"
+
+export {
   RevocationListPath
 } from "./types/RevocationListPath"
