@@ -277,6 +277,11 @@ export class EthereumRevocationRegistryController {
     return this._generateChangeStatusSignedPayload(revoked, revocationKeyPath)
   }
 
+  async changeStatusDelegated(revoked: boolean, revocationKeyPath: RevocationKeyPath): Promise<ContractTransaction> {
+    this.validateRevocationKeyPath(revocationKeyPath);
+    return this.registry.changeStatusDelegated(revoked, revocationKeyPath.namespace,  revocationKeyPath.list, revocationKeyPath.revocationKey);
+  }
+
   async changeStatusDelegatedSigned(signedOperation: ChangeStatusSignedOperation): Promise<ContractTransaction> {
     return this._changeStatusSigned(signedOperation, true)
   }
@@ -285,10 +290,6 @@ export class EthereumRevocationRegistryController {
     return this._generateChangeStatusSignedPayload(revoked, revocationKeyPath, true)
   }
 
-  async changeStatusDelegated(revoked: boolean, revocationKeyPath: RevocationKeyPath): Promise<ContractTransaction> {
-    this.validateRevocationKeyPath(revocationKeyPath);
-    return this.registry.changeStatusDelegated(revoked, revocationKeyPath.namespace,  revocationKeyPath.list, revocationKeyPath.revocationKey);
-  }
 
   async changeStatusesInList(revocationListPath: RevocationListPath, revocationKeyInstructions: RevocationKeyInstruction[]): Promise<ContractTransaction> {
     this.validateRevocationListPath(revocationListPath);
