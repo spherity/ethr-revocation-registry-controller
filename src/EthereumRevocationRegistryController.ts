@@ -33,6 +33,11 @@ export type ChangeStatusSignedOperation = Signaturish & {
   revocationKeyPath: RevocationKeyPath
 }
 
+export type ChangeStatusDelegatedSignedOperation = Signaturish & {
+  revoked: boolean
+  revocationKeyPath: RevocationKeyPath
+}
+
 export interface EthereumRevocationRegistryControllerConfig {
   contract?: RevocationRegistry,
   provider?: Provider,
@@ -140,6 +145,13 @@ export class EthereumRevocationRegistryController {
     this.validateBytes32(revocationKeyPath.revocationKey);
   }
 
+  private async checkNonceForAddress(address: string, expectedNonce: BigNumber) {
+    const currentNonce = await this.registry.nonces(address)
+    if(!currentNonce.eq(expectedNonce)) {
+      throw new Error(`Nonce in the payload is out of date or invalid (Expected: '${expectedNonce}' ; Current: '${currentNonce}').`)
+    }
+  }
+
   private async getTimestampedEventsUntilDate(events: Array<TypedEvent>, timestamp: Date): Promise<Array<TimestampedEvent>> {
     const timestampSeconds = Math.floor(timestamp.getTime()/1000);
     let timestampedEvents = await Promise.all(events.map(async (event) => {
@@ -201,27 +213,38 @@ export class EthereumRevocationRegistryController {
     return this.registry.changeStatus(revoked, revocationKeyPath.namespace, revocationKeyPath.list, revocationKeyPath.revocationKey);
   }
 
-  async changeStatusSigned(signedOperation: ChangeStatusSignedOperation): Promise<ContractTransaction> {
+  private async _changeStatusSigned(signedOperation: ChangeStatusSignedOperation, delegatedCall: boolean = false): Promise<ContractTransaction> {
     if(signedOperation.revoked === undefined) throw new Error("revoked must be set")
     this.validateSignaturish(signedOperation)
     this.validateRevocationKeyPath(signedOperation.revocationKeyPath)
-    const nonce = await this.registry.nonces(signedOperation.signer)
-    if(!nonce.eq(signedOperation.nonce)) {
-      throw new Error(`Nonce in the payload is out of date or invalid (Expected: '${signedOperation.nonce}' ; Current: '${nonce}'). Has the payload already been used?`)
-    }
-
+    await this.checkNonceForAddress(signedOperation.signer, signedOperation.nonce)
     const revocationKeyPath = signedOperation.revocationKeyPath
-    return this.registry.changeStatusSigned(
-        signedOperation.revoked,
-        revocationKeyPath.namespace,
-        revocationKeyPath.list,
-        revocationKeyPath.revocationKey,
-        signedOperation.signer,
-        signedOperation.signature,
-    )
+    if(delegatedCall) {
+      return this.registry.changeStatusDelegatedSigned(
+          signedOperation.revoked,
+          revocationKeyPath.namespace,
+          revocationKeyPath.list,
+          revocationKeyPath.revocationKey,
+          signedOperation.signer,
+          signedOperation.signature,
+      )
+    } else {
+      return this.registry.changeStatusSigned(
+          signedOperation.revoked,
+          revocationKeyPath.namespace,
+          revocationKeyPath.list,
+          revocationKeyPath.revocationKey,
+          signedOperation.signer,
+          signedOperation.signature,
+      )
+    }
   }
 
-  async generateChangeStatusSignedPayload(revoked: boolean, revocationKeyPath: RevocationKeyPath): Promise<ChangeStatusSignedOperation> {
+  async changeStatusSigned(signedOperation: ChangeStatusSignedOperation): Promise<ContractTransaction> {
+    return this._changeStatusSigned(signedOperation)
+  }
+
+  private async _generateChangeStatusSignedPayload(revoked: boolean, revocationKeyPath: RevocationKeyPath, delegatedCall: boolean = false): Promise<ChangeStatusSignedOperation> {
     if(!this.typedDataDomain) {
       this.typedDataDomain = await this.getEip712Domain()
     }
@@ -239,7 +262,12 @@ export class EthereumRevocationRegistryController {
       nonce: nonce.toNumber()
     }
 
-    const signature = await this.signer._signTypedData(this.typedDataDomain, EIP712ChangeStatusType, values)
+    let signature: string
+    if(delegatedCall) {
+      signature = await this.signer._signTypedData(this.typedDataDomain, EIP712ChangeStatusType, values)
+    } else {
+      signature = await this.signer._signTypedData(this.typedDataDomain, EIP712ChangeStatusDelegatedType, values)
+    }
 
     return {
       revoked: revoked,
@@ -248,6 +276,18 @@ export class EthereumRevocationRegistryController {
       signature: signature,
       nonce: nonce
     } as ChangeStatusSignedOperation
+  }
+
+  async generateChangeStatusSignedPayload(revoked: boolean, revocationKeyPath: RevocationKeyPath): Promise<ChangeStatusSignedOperation> {
+    return this._generateChangeStatusSignedPayload(revoked, revocationKeyPath)
+  }
+
+  async changeStatusDelegatedSigned(signedOperation: ChangeStatusSignedOperation): Promise<ContractTransaction> {
+    return this._changeStatusSigned(signedOperation, true)
+  }
+
+  async generateChangeStatusDelegatedSignedPayload(revoked: boolean, revocationKeyPath: RevocationKeyPath): Promise<ChangeStatusSignedOperation> {
+    return this._generateChangeStatusSignedPayload(revoked, revocationKeyPath, true)
   }
 
   async changeStatusDelegated(revoked: boolean, revocationKeyPath: RevocationKeyPath): Promise<ContractTransaction> {
