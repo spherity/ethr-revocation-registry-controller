@@ -40,6 +40,7 @@ describe('EthrRevocationRegistryController', () => {
     changeListOwner: jest.fn(),
     addListDelegate: jest.fn(),
     removeListDelegate: jest.fn(),
+    changeListStatus: jest.fn(),
     queryFilter: jest.fn(),
     filters: {
       RevocationListStatusChanged: jest.fn(),
@@ -1312,6 +1313,64 @@ describe('EthrRevocationRegistryController', () => {
 
         expect(registry.removeListDelegate(revocationListPath, web3.utils.keccak256("invalidaddress"))).rejects.toThrow(Error);
         expect(registryContractMock.removeListDelegate).toHaveBeenCalledTimes(0);
+      })
+    })
+  })
+
+  describe('changeListStatus input verification', () => {
+    it('should let valid parameters pass', async () => {
+      const revocationStatus: boolean = true;
+      const revocationListPath: RevocationListPath = {
+        namespace: validAddress,
+        list: web3.utils.keccak256("listname"),
+      }
+
+      expect(registry.changeListStatus(revocationStatus, revocationListPath)).resolves;
+      expect(registryContractMock.changeListStatus).toHaveBeenCalledTimes(1);
+      expect(registryContractMock.changeListStatus).toHaveBeenCalledWith(revocationStatus, revocationListPath.namespace, revocationListPath.list);
+    })
+    describe('namespace in revocationListPath', () => {
+      it('should notice emptiness', async () => {
+        const revocationStatus: boolean = true;
+        const revocationListPath: RevocationListPath = {
+          namespace: "",
+          list: web3.utils.keccak256("listname"),
+        }
+
+        expect(registry.changeListStatus(revocationStatus, revocationListPath)).rejects.toThrow(Error);
+        expect(registryContractMock.changeListStatus).toHaveBeenCalledTimes(0);
+      })
+      it('should notice invalid address', async () => {
+        const revocationStatus: boolean = true;
+        const revocationListPath: RevocationListPath = {
+          namespace: web3.utils.keccak256("invalidAddress"),
+          list: web3.utils.keccak256("listname"),
+        }
+
+        expect(registry.changeListStatus(revocationStatus, revocationListPath)).rejects.toThrow(Error);
+        expect(registryContractMock.changeListStatus).toHaveBeenCalledTimes(0);
+      })
+    })
+    describe('for list in revocationListPath', () => {
+      it('should notice emptiness', async () => {
+        const revocationStatus: boolean = true;
+        const revocationListPath: RevocationListPath = {
+          namespace: validAddress,
+          list: "",
+        }
+
+        expect(registry.changeListStatus(revocationStatus, revocationListPath)).rejects.toThrow(Error);
+        expect(registryContractMock.changeListStatus).toHaveBeenCalledTimes(0);
+      })
+      it('should notice invalid bytes32', async () => {
+        const revocationStatus: boolean = true;
+        const revocationListPath: RevocationListPath = {
+          namespace: validAddress,
+          list: validAddress,
+        }
+
+        expect(registry.changeListStatus(revocationStatus, revocationListPath)).rejects.toThrow(Error);
+        expect(registryContractMock.changeListStatus).toHaveBeenCalledTimes(0);
       })
     })
   })

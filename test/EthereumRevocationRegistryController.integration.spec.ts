@@ -115,7 +115,7 @@ describe('EthrRevocationRegistryController', () => {
     });
   });
 
-  describe('ChangeListStatusDelegated', () => {
+  describe('ChangeStatusDelegated', () => {
     it('Separate signer creates a signed payload for the initial controller to send out', async () => {
       const signer = new Wallet("0x278a5de700e29faae8e40e366ec5012b5ec63d36ec77e8a2417154cc1d25383f")
       signer.connect(web3Provider)
