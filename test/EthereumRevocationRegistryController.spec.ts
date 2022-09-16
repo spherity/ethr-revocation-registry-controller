@@ -1063,7 +1063,7 @@ describe('EthrRevocationRegistryController', () => {
         list: web3.utils.keccak256("listname"),
       }
       const expiryDate = GetDateForTodayPlusDays(5);
-      const expiryDateInSeconds = expiryDate.getTime()/1000;
+      const expiryDateInSeconds = Math.floor(expiryDate.getTime()/1000);
 
       expect(registry.addListDelegate(revocationListPath, validAddress, expiryDate)).resolves;
       expect(registryContractMock.addListDelegate).toHaveBeenCalledTimes(1);
