@@ -14,13 +14,23 @@ import {TypedEvent} from "@spherity/ethr-revocation-registry/types/ethers-v5/com
 import {TypedDataSigner} from "@ethersproject/abstract-signer";
 import {ChangeStatusSignedOperation} from "../dist/src/EthereumRevocationRegistryController";
 import {BigNumber} from "@ethersproject/bignumber";
+import {Network, Provider} from "@ethersproject/providers";
+import {EIP712DomainName} from "@spherity/ethr-revocation-registry";
 
 jest.setTimeout(30000)
 
 const validAddress = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
 describe('EthrRevocationRegistryController', () => {
   let registry: EthereumRevocationRegistryController;
+  let registryWithoutSigner: EthereumRevocationRegistryController;
+  const networkMock = {
+    chainId: 1,
+    name: "Mocked Network",
+  } as Network
+  const addressMock = "mockedRegistryAddress"
+  const contractVersion = "1.0.0"
   const registryContractMock = {
+    address: addressMock,
     isRevoked: jest.fn(),
     changeStatus: jest.fn(),
     changeStatusSigned: jest.fn(),
@@ -35,16 +45,36 @@ describe('EthrRevocationRegistryController', () => {
       RevocationListStatusChanged: jest.fn(),
       RevocationStatusChanged: jest.fn(),
     },
-    nonces: jest.fn()
-  } as unknown as RevocationRegistry;
+    nonces: jest.fn(),
+    version: jest.fn(),
+    provider: {
+      getNetwork: jest.fn()
+    }
+  } as unknown as RevocationRegistry
 
   const signerMock = {
+    getAddress: jest.fn(),
+    _signTypedData: jest.fn()
+  } as unknown as Signer & TypedDataSigner
+  const providerMock = {} as unknown as Provider
 
-  } as unknown as Signer & TypedDataSigner;
-  const addressMock = "";
+  beforeEach(async () => {
+    when(registryContractMock.provider.getNetwork).mockResolvedValue(networkMock)
+    when(registryContractMock.version).mockResolvedValue(contractVersion)
+  })
 
   beforeAll(async () => {
-    registry = new EthereumRevocationRegistryController({contract: registryContractMock, signer: signerMock, address: addressMock});
+    registry = new EthereumRevocationRegistryController({
+      contract: registryContractMock,
+      provider: providerMock,
+      signer: signerMock,
+      address: addressMock
+    });
+    registryWithoutSigner = new EthereumRevocationRegistryController({
+      contract: registryContractMock,
+      provider: providerMock,
+      address: addressMock
+    });
   })
 
   afterEach(async () => {
@@ -712,6 +742,43 @@ describe('EthrRevocationRegistryController', () => {
         expect(registry.changeStatusSigned(changeStatusSignedOperation)).rejects.toThrow(Error);
         expect(registryContractMock.changeStatusSigned).toHaveBeenCalledTimes(0);
       })
+    })
+  })
+
+  describe('generateChangeStatusSignedPayload input verification', () => {
+    it('should return a ChangeStatusSignedOperation', async () => {
+      const revocationStatus = true
+      const nonce = BigNumber.from(0)
+      const signature = "mockedSignature"
+      const revocationKeyPath: RevocationKeyPath = {
+        namespace: validAddress,
+        list: web3.utils.keccak256("list"),
+        revocationKey: web3.utils.keccak256("revocationKey")
+      }
+      when(signerMock.getAddress).mockResolvedValue(validAddress)
+      when(signerMock._signTypedData).calledWith({
+        name: EIP712DomainName,
+        version: contractVersion,
+        chainId: networkMock.chainId,
+        verifyingContract: addressMock
+      }, expect.anything(), expect.anything()).mockResolvedValue(signature)
+      when(registryContractMock.nonces).calledWith(validAddress).mockResolvedValue(nonce)
+      expect(registry.generateChangeStatusSignedPayload(revocationStatus, revocationKeyPath)).resolves.toEqual({
+        revoked: revocationStatus,
+        revocationKeyPath: revocationKeyPath,
+        signer: validAddress,
+        signature: signature,
+        nonce: nonce
+      })
+    })
+
+    it('should return an error, because no signer was given', async () => {
+      const revocationKeyPath: RevocationKeyPath = {
+        namespace: validAddress,
+        list: web3.utils.keccak256("list"),
+        revocationKey: web3.utils.keccak256("revocationKey")
+      }
+      expect(registryWithoutSigner.generateChangeStatusSignedPayload(true, revocationKeyPath)).rejects.toThrow(Error)
     })
   })
 

@@ -93,6 +93,7 @@ export class EthereumRevocationRegistryController {
     const address = config.address !== undefined ? config.address : DEFAULT_REGISTRY_ADDRESS;
     if (config.contract) {
       this.registry = config.contract
+      this.address = config.contract.address
     } else if (config.provider || config.signer?.provider || config.rpcUrl) {
       let prov = config.provider || config.signer?.provider
       if(!prov && config.rpcUrl) {
@@ -106,7 +107,7 @@ export class EthereumRevocationRegistryController {
         .attach(address || DEFAULT_REGISTRY_ADDRESS)
         .connect(prov!)
     } else {
-      throw new Error("Either a contract instance or a provider or rpcUrl is required to initialize!")
+      throw new Error("Either a contract instance, a provider or a rpcUrl is required to initialize!")
     }
     this.signer = config.signer
     this.address = address
