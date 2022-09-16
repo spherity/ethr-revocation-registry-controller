@@ -18,7 +18,7 @@ import {
   EIP712ChangeListStatusType,
   EIP712ChangeStatusDelegatedType,
   EIP712ChangeStatusesInListDelegatedType,
-  EIP712ChangeStatusInListType,
+  EIP712ChangeStatusesInListType,
   EIP712ChangeStatusType,
   EIP712RemoveListDelegateType
 } from "@spherity/ethr-revocation-registry";
@@ -442,9 +442,9 @@ export class EthereumRevocationRegistryController {
 
     let signature: string
     if(delegatedCall) {
-      signature = await this.signer._signTypedData(this.typedDataDomain, EIP712ChangeStatusInListType, values)
-    } else {
       signature = await this.signer._signTypedData(this.typedDataDomain, EIP712ChangeStatusesInListDelegatedType, values)
+    } else {
+      signature = await this.signer._signTypedData(this.typedDataDomain, EIP712ChangeStatusesInListType, values)
     }
 
     return {
