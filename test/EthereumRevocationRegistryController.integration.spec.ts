@@ -8,15 +8,16 @@ import {
 } from "../src";
 import {Wallet} from "@ethersproject/wallet";
 import web3 from "web3";
-import {sign} from "crypto";
 
 jest.setTimeout(30000)
 
 describe('EthrRevocationRegistryController', () => {
   let registry: RevocationRegistry
   let controller: EthereumRevocationRegistryController
+  let typedDataSignableRegistry
   let typedDataSignableController: EthereumRevocationRegistryController
   let typedDataSigner: Wallet
+  let secondTypedDataSignableRegistry
   let secondTypedDataSignableController: EthereumRevocationRegistryController
   let secondTypedDataSigner: Wallet
   let accounts: string[]
@@ -40,7 +41,7 @@ describe('EthrRevocationRegistryController', () => {
 
   const web3Provider = createProvider()
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     const factory = new factories.RevocationRegistry__factory().connect(web3Provider.getSigner(0))
     registry = await factory.deploy()
     registry = await registry.deployed()
@@ -51,19 +52,19 @@ describe('EthrRevocationRegistryController', () => {
 
     controller = new EthereumRevocationRegistryController({contract: registry, provider: web3Provider, address: registry.address})
 
-    typedDataSigner = new Wallet("0x278a5de700e29faae8e40e366ec5012b5ec63d36ec77e8a2417154cc1d25383f")
-    typedDataSigner.connect(web3Provider)
+    typedDataSigner = new Wallet("0x278a5de700e29faae8e40e366ec5012b5ec63d36ec77e8a2417154cc1d25383f", web3Provider)
+    typedDataSignableRegistry = registry.connect(typedDataSigner)
     typedDataSignableController = new EthereumRevocationRegistryController({
-      contract: registry,
+      contract: typedDataSignableRegistry,
       provider: web3Provider,
       signer: typedDataSigner,
       address: registry.address
     })
 
-    secondTypedDataSigner = new Wallet("0x0000000000000000000000000000000000000000000000000000000000000005")
-    secondTypedDataSigner.connect(web3Provider)
+    secondTypedDataSigner = new Wallet("0x0000000000000000000000000000000000000000000000000000000000000005", web3Provider)
+    secondTypedDataSignableRegistry = registry.connect(secondTypedDataSigner)
     secondTypedDataSignableController = new EthereumRevocationRegistryController({
-      contract: registry,
+      contract: secondTypedDataSignableRegistry,
       provider: web3Provider,
       signer: secondTypedDataSigner,
       address: registry.address
@@ -166,12 +167,72 @@ describe('EthrRevocationRegistryController', () => {
     });
   });
 
+  describe('ChangeStatusesInListDelegatedSigned', () => {
+    it('Separate signer creates a signed payload for the initial controller to send out', async () => {
+      const revocationListPath = generateRevocationListPathForAccount(typedDataSigner.address)
+      const prepareTransaction = await typedDataSignableController.addListDelegate(generateRevocationListPathForAccount(typedDataSigner.address), secondTypedDataSigner.address, GetDateForTodayPlusDays(5))
+      expect(prepareTransaction.wait()).resolves
+
+      const revocationKeyInstructions: RevocationKeyInstruction[] = [
+        {
+          revocationKey: web3.utils.keccak256("revocationKey"),
+          revoked: true
+        } as any,
+        {
+          revocationKey: web3.utils.keccak256("revocationKey2"),
+          revoked: true
+        },
+      ];
+
+      const payload = await secondTypedDataSignableController.generateChangeStatusesInListDelegatedSignedPayload(generateRevocationListPathForAccount(typedDataSigner.address), revocationKeyInstructions)
+      const transaction = await controller.changeStatusesInListDelegatedSigned(payload)
+      expect(transaction.wait()).resolves
+
+      const expectedRevocationKeyPath = {
+        namespace: revocationListPath.namespace,
+        list: revocationListPath.list,
+        revocationKey: revocationKeyInstructions[0].revocationKey
+      } as RevocationKeyPath
+
+      await expect(controller.isRevoked(expectedRevocationKeyPath)).resolves.toEqual(revocationKeyInstructions[0].revoked)
+    });
+  });
+
   describe('ChangeListStatusSigned', () => {
     it('Separate signer creates a signed payload for the initial controller to send out', async () => {
       const payload = await typedDataSignableController.generateChangeListStatusSignedPayload(true, generateRevocationListPathForAccount(typedDataSigner.address))
       const transaction = await controller.changeListStatusSigned(payload)
       expect(transaction.wait()).resolves
       await expect(controller.isRevoked(generateRevocationKeyPathForAccount(typedDataSigner.address))).resolves.toEqual(true)
+    });
+  });
+
+  describe('ChangeListOwnerSigned', () => {
+    it('Separate signer creates a signed payload for the initial controller to send out', async () => {
+      const revocationStatus = true
+      const payload = await typedDataSignableController.generateChangeListOwnerSignedPayload(generateRevocationListPathForAccount(typedDataSigner.address), secondTypedDataSigner.address)
+      const transaction = await controller.changeListOwnerSigned(payload)
+      expect(transaction.wait()).resolves
+      expect(registry.identityIsOwner(typedDataSigner.address, generateRevocationKeyPathForAccount(typedDataSigner.address).list, secondTypedDataSigner.address)).resolves.toEqual(true)
+      const transaction2 = await secondTypedDataSignableController.changeStatus(revocationStatus, generateRevocationKeyPathForAccount(typedDataSigner.address))
+      expect(transaction2.wait()).resolves
+      expect(controller.isRevoked(generateRevocationKeyPathForAccount(typedDataSigner.address))).resolves.toEqual(revocationStatus)
+      //
+    });
+  });
+
+  describe('AddListDelegateSigned', () => {
+    it('Separate signer creates a signed payload for the initial controller to send out', async () => {
+      const payload = await typedDataSignableController.generateChangeListOwnerSignedPayload(generateRevocationListPathForAccount(typedDataSigner.address), secondTypedDataSigner.address)
+      const transaction = await controller.changeListOwnerSigned(payload)
+      expect(transaction.wait()).resolves
+      expect(registry.identityIsOwner(typedDataSigner.address, generateRevocationKeyPathForAccount(typedDataSigner.address).list, secondTypedDataSigner.address)).resolves.toEqual(true)
+      // DOES CHANGE OWNER REALLY WORK?
+      // await sleepForMs(5000)
+      // const transaction2 = await secondTypedDataSignableController.changeStatus(revocationStatus, generateRevocationKeyPathForAccount(typedDataSigner.address))
+      // expect(transaction2.wait()).resolves
+      // expect(controller.isRevoked(generateRevocationKeyPathForAccount(typedDataSigner.address))).resolves.toEqual(revocationStatus)
+      //
     });
   });
 })
