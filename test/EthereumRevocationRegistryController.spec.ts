@@ -27,6 +27,10 @@ describe('EthrRevocationRegistryController', () => {
     chainId: 1,
     name: "Mocked Network",
   } as Network
+  const signerMock = {
+    getAddress: jest.fn(),
+    _signTypedData: jest.fn()
+  } as unknown as Signer & TypedDataSigner
   const addressMock = "mockedRegistryAddress"
   const contractVersion = "1.0.0"
   const registryContractMock = {
@@ -46,23 +50,14 @@ describe('EthrRevocationRegistryController', () => {
       RevocationListStatusChanged: jest.fn(),
       RevocationStatusChanged: jest.fn(),
     },
+    signer: signerMock,
     nonces: jest.fn(),
     version: jest.fn(),
     provider: {
-      getNetwork: jest.fn()
-    }
+      getNetwork: jest.fn(),
+    } as any as Provider
   } as unknown as RevocationRegistry
-
-  const signerMock = {
-    getAddress: jest.fn(),
-    _signTypedData: jest.fn()
-  } as unknown as Signer & TypedDataSigner
   const providerMock = {} as unknown as Provider
-
-  beforeEach(async () => {
-    when(registryContractMock.provider.getNetwork).mockResolvedValue(networkMock)
-    when(registryContractMock.version).mockResolvedValue(contractVersion)
-  })
 
   beforeAll(async () => {
     registry = new EthereumRevocationRegistryController({
@@ -76,6 +71,13 @@ describe('EthrRevocationRegistryController', () => {
       provider: providerMock,
       address: addressMock
     });
+  })
+
+  beforeEach(async () => {
+    when(registryContractMock.provider.getNetwork).mockResolvedValue(networkMock)
+    when(registryContractMock.version).mockResolvedValue(contractVersion)
+    when(registryContractMock.version).mockResolvedValue(contractVersion)
+    when(registryContractMock.signer.getAddress).mockResolvedValue(validAddress)
   })
 
   afterEach(async () => {
@@ -921,7 +923,6 @@ describe('EthrRevocationRegistryController', () => {
 
   describe('changeStatusesInListDelegated input verification', () => {
     it('should let valid parameters pass', async () => {
-      const revocationStatus: boolean = true;
       const revocationListPath: RevocationListPath = {
         namespace: validAddress,
         list: web3.utils.keccak256("listname"),
