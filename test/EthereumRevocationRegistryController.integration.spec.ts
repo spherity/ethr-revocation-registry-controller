@@ -242,7 +242,7 @@ describe('EthrRevocationRegistryController', () => {
       const removalPayload = await typedDataSignableController.generateRemoveListDelegateSignedPayload(generateRevocationListPathForAccount(typedDataSigner.address), secondTypedDataSigner.address)
       const removalTransaction = await controller.removeListDelegateSigned(removalPayload)
       expect(removalTransaction.wait()).resolves
-      expect(secondTypedDataSignableController.changeStatusDelegated(revocationStatus, generateRevocationKeyPathForAccount(typedDataSigner.address))).rejects
+      expect(secondTypedDataSignableController.changeStatusDelegated(revocationStatus, generateRevocationKeyPathForAccount(typedDataSigner.address))).rejects.toThrow(Error)
     });
   });
 })
