@@ -208,7 +208,7 @@ describe('EthrRevocationRegistryController', () => {
   });
 
   describe('ChangeListOwnerSigned', () => {
-    it('Separate signer creates a signed payload for the initial controller to send out', async () => {
+    it('Owner as a signer creates a meta transaction for changing the list owner and then expect the new owner to be able to write into the list while the past owner fails doing that', async () => {
       const revocationStatus = true
       const payload = await typedDataSignableController.generateChangeListOwnerSignedPayload(generateRevocationListPathForAccount(typedDataSigner.address), secondTypedDataSigner.address)
       const transaction = await controller.changeListOwnerSigned(payload)
@@ -217,12 +217,12 @@ describe('EthrRevocationRegistryController', () => {
       const transaction2 = await secondTypedDataSignableController.changeStatus(revocationStatus, generateRevocationKeyPathForAccount(typedDataSigner.address))
       expect(transaction2.wait()).resolves
       expect(controller.isRevoked(generateRevocationKeyPathForAccount(typedDataSigner.address))).resolves.toEqual(revocationStatus)
-      //
+      expect(secondTypedDataSignableController.changeStatus(revocationStatus, generateRevocationKeyPathForAccount(typedDataSigner.address))).rejects
     });
   });
 
   describe('AddListDelegateSigned', () => {
-    it('Separate signer creates a signed payload for the initial controller to send out', async () => {
+    it('Owner as a signer creates a meta transaction for adding a delegate and then the delegate should be able to write into the list', async () => {
       const revocationStatus = true
       const payload = await typedDataSignableController.generateAddListDelegateSignedPayload(generateRevocationListPathForAccount(typedDataSigner.address), secondTypedDataSigner.address, GetDateForTodayPlusDays(5))
       const transaction = await controller.addListDelegateSigned(payload)
@@ -230,6 +230,19 @@ describe('EthrRevocationRegistryController', () => {
       const transaction2 = await secondTypedDataSignableController.changeStatusDelegated(revocationStatus, generateRevocationKeyPathForAccount(typedDataSigner.address))
       expect(transaction2.wait()).resolves
       expect(controller.isRevoked(generateRevocationKeyPathForAccount(typedDataSigner.address))).resolves.toEqual(revocationStatus)
+    });
+  });
+
+  describe('RemoveListDelegateSigned', () => {
+    it('Owner as a signer creates a meta transaction for adding a delegate, removing it again and then expect that writing into the list with the delegate fails', async () => {
+      const revocationStatus = true
+      const payload = await typedDataSignableController.generateAddListDelegateSignedPayload(generateRevocationListPathForAccount(typedDataSigner.address), secondTypedDataSigner.address, GetDateForTodayPlusDays(5))
+      const transaction = await controller.addListDelegateSigned(payload)
+      expect(transaction.wait()).resolves
+      const removalPayload = await typedDataSignableController.generateRemoveListDelegateSignedPayload(generateRevocationListPathForAccount(typedDataSigner.address), secondTypedDataSigner.address)
+      const removalTransaction = await controller.removeListDelegateSigned(removalPayload)
+      expect(removalTransaction.wait()).resolves
+      expect(secondTypedDataSignableController.changeStatusDelegated(revocationStatus, generateRevocationKeyPathForAccount(typedDataSigner.address))).rejects
     });
   });
 })

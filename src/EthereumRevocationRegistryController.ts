@@ -97,6 +97,8 @@ export class EthereumRevocationRegistryController {
       let prov = config.provider || config.signer?.provider
       if(!prov && config.rpcUrl) {
         prov = new JsonRpcProvider(config.rpcUrl, config.chainNameOrId || 'any')
+        // TO-DO: SignTypedData with jsonrpc provider research
+        // https://github.com/ethers-io/ethers.js/commit/15a90af5be75806e26f589f0a3f3687c0fb1c672
       }
       if (!prov && !config.rpcUrl) {
         throw new Error("Provider and/org rpcUrl required if contract isn't specified!")
