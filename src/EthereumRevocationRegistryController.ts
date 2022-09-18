@@ -12,9 +12,19 @@ import {RevocationKeyPath} from "./types/RevocationKeyPath";
 import {isEmpty} from "lodash";
 import {Block} from "@ethersproject/abstract-provider";
 import {TypedEvent} from "@spherity/ethr-revocation-registry/types/ethers-v5/common";
-import {EIP712ChangeStatusType} from "@spherity/ethr-revocation-registry";
+import {
+  EIP712AddListDelegateType,
+  EIP712ChangeListOwnerType,
+  EIP712ChangeListStatusType,
+  EIP712ChangeStatusDelegatedType,
+  EIP712ChangeStatusesInListDelegatedType,
+  EIP712ChangeStatusesInListType,
+  EIP712ChangeStatusType,
+  EIP712RemoveListDelegateType
+} from "@spherity/ethr-revocation-registry";
 import {TypedDataSigner} from "@ethersproject/abstract-signer";
 import {BigNumber} from "@ethersproject/bignumber";
+import {RevocationKeysAndStatuses} from "./types/RevocationKeysAndStatuses";
 
 export const DEFAULT_REGISTRY_ADDRESS = '0x00000000000000000000000'
 
@@ -33,6 +43,32 @@ export type ChangeStatusSignedOperation = Signaturish & {
   revocationKeyPath: RevocationKeyPath
 }
 
+export type ChangeStatusesInListSignedOperation = Signaturish & {
+  revocationListPath: RevocationListPath,
+  revocationKeyInstructions: RevocationKeyInstruction[]
+}
+
+export type ChangeListOwnerSignedOperation = Signaturish & {
+  revocationListPath: RevocationListPath,
+  newOwner: string,
+}
+
+export type AddListDelegateSignedOperation = Signaturish & {
+  revocationListPath: RevocationListPath,
+  delegate: string
+  expiryDate: Date
+}
+
+export type RemoveListDelegateSignedOperation = Signaturish & {
+  revocationListPath: RevocationListPath,
+  delegate: string
+}
+
+export type ChangeListStatusSignedOperation = Signaturish & {
+  revoked: boolean,
+  revocationListPath: RevocationListPath
+}
+
 export interface EthereumRevocationRegistryControllerConfig {
   contract?: RevocationRegistry,
   provider?: Provider,
@@ -49,7 +85,6 @@ export interface IsRevokedOptions {
 
 export class EthereumRevocationRegistryController {
   private registry: RevocationRegistry
-  private signer?: Signer & TypedDataSigner
   private address: string
   private typedDataDomain: TypedDataDomain | undefined
 
@@ -57,6 +92,7 @@ export class EthereumRevocationRegistryController {
     const address = config.address !== undefined ? config.address : DEFAULT_REGISTRY_ADDRESS;
     if (config.contract) {
       this.registry = config.contract
+      this.address = config.contract.address
     } else if (config.provider || config.signer?.provider || config.rpcUrl) {
       let prov = config.provider || config.signer?.provider
       if(!prov && config.rpcUrl) {
@@ -70,14 +106,12 @@ export class EthereumRevocationRegistryController {
         .attach(address || DEFAULT_REGISTRY_ADDRESS)
         .connect(prov!)
     } else {
-      throw new Error("Either a contract instance or a provider or rpcUrl is required to initialize!")
+      throw new Error("Either a contract instance, a provider or a rpcUrl is required to initialize!")
     }
-    this.signer = config.signer
     this.address = address
   }
 
   private async getEip712Domain(): Promise<TypedDataDomain> {
-    const versionMajor = await this.registry.VERSION_MAJOR
     const version = await this.registry.version()
     const network = await this.registry.provider.getNetwork()
     const chainId = network.chainId
@@ -140,6 +174,20 @@ export class EthereumRevocationRegistryController {
     this.validateBytes32(revocationKeyPath.revocationKey);
   }
 
+  private validateExpiryDateIsInFuture(expiryDate: Date) {
+    const today = new Date(Date.now())
+    if(expiryDate < today) {
+      throw new Error("expiryDate must be in the future")
+    }
+  }
+
+  private async checkNonceForAddress(address: string, expectedNonce: BigNumber) {
+    const currentNonce = await this.registry.nonces(address)
+    if(!currentNonce.eq(expectedNonce)) {
+      throw new Error(`Nonce in the payload is out of date or invalid (Expected: '${expectedNonce}' ; Current: '${currentNonce}').`)
+    }
+  }
+
   private async getTimestampedEventsUntilDate(events: Array<TypedEvent>, timestamp: Date): Promise<Array<TimestampedEvent>> {
     const timestampSeconds = Math.floor(timestamp.getTime()/1000);
     let timestampedEvents = await Promise.all(events.map(async (event) => {
@@ -197,37 +245,49 @@ export class EthereumRevocationRegistryController {
   }
 
   async changeStatus(revoked: boolean, revocationKeyPath: RevocationKeyPath): Promise<ContractTransaction> {
-    this.validateRevocationKeyPath(revocationKeyPath);
-    return this.registry.changeStatus(revoked, revocationKeyPath.namespace, revocationKeyPath.list, revocationKeyPath.revocationKey);
+    if(revoked === undefined) throw new Error("revoked must be set")
+    this.validateRevocationKeyPath(revocationKeyPath)
+    return this.registry.changeStatus(revoked, revocationKeyPath.namespace, revocationKeyPath.list, revocationKeyPath.revocationKey)
   }
 
-  async changeStatusSigned(signedOperation: ChangeStatusSignedOperation): Promise<ContractTransaction> {
+  private async _changeStatusSigned(signedOperation: ChangeStatusSignedOperation, delegatedCall: boolean = false): Promise<ContractTransaction> {
     if(signedOperation.revoked === undefined) throw new Error("revoked must be set")
     this.validateSignaturish(signedOperation)
     this.validateRevocationKeyPath(signedOperation.revocationKeyPath)
-    const nonce = await this.registry.nonces(signedOperation.signer)
-    if(!nonce.eq(signedOperation.nonce)) {
-      throw new Error(`Nonce in the payload is out of date or invalid (Expected: '${signedOperation.nonce}' ; Current: '${nonce}'). Has the payload already been used?`)
-    }
-
+    await this.checkNonceForAddress(signedOperation.signer, signedOperation.nonce)
     const revocationKeyPath = signedOperation.revocationKeyPath
-    return this.registry.changeStatusSigned(
-        signedOperation.revoked,
-        revocationKeyPath.namespace,
-        revocationKeyPath.list,
-        revocationKeyPath.revocationKey,
-        signedOperation.signer,
-        signedOperation.signature,
-    )
+    if(delegatedCall) {
+      return this.registry.changeStatusDelegatedSigned(
+          signedOperation.revoked,
+          revocationKeyPath.namespace,
+          revocationKeyPath.list,
+          revocationKeyPath.revocationKey,
+          signedOperation.signer,
+          signedOperation.signature,
+      )
+    } else {
+      return this.registry.changeStatusSigned(
+          signedOperation.revoked,
+          revocationKeyPath.namespace,
+          revocationKeyPath.list,
+          revocationKeyPath.revocationKey,
+          signedOperation.signer,
+          signedOperation.signature,
+      )
+    }
   }
 
-  async generateChangeStatusSignedPayload(revoked: boolean, revocationKeyPath: RevocationKeyPath): Promise<ChangeStatusSignedOperation> {
+  async changeStatusSigned(signedOperation: ChangeStatusSignedOperation): Promise<ContractTransaction> {
+    return this._changeStatusSigned(signedOperation)
+  }
+
+  private async _generateChangeStatusSignedPayload(revoked: boolean, revocationKeyPath: RevocationKeyPath, delegatedCall: boolean = false): Promise<ChangeStatusSignedOperation> {
     if(!this.typedDataDomain) {
       this.typedDataDomain = await this.getEip712Domain()
     }
-    if(!this.signer) throw new Error("Please provide a signer in the constructor as it is required for the method to work!")
+    if(!this.registry.signer) throw new Error("Please provide a signer in the constructor as it is required for the method to work!")
     this.validateRevocationKeyPath(revocationKeyPath)
-    const signer = await this.signer.getAddress()
+    const signer = await this.registry.signer.getAddress()
     const nonce = await this.registry.nonces(signer)
 
     const values = {
@@ -239,7 +299,12 @@ export class EthereumRevocationRegistryController {
       nonce: nonce.toNumber()
     }
 
-    const signature = await this.signer._signTypedData(this.typedDataDomain, EIP712ChangeStatusType, values)
+    let signature: string
+    if(delegatedCall) {
+      signature = await (this.registry.signer as Signer & TypedDataSigner)._signTypedData(this.typedDataDomain, EIP712ChangeStatusDelegatedType, values)
+    } else {
+      signature = await (this.registry.signer as Signer & TypedDataSigner)._signTypedData(this.typedDataDomain, EIP712ChangeStatusType, values)
+    }
 
     return {
       revoked: revoked,
@@ -250,13 +315,24 @@ export class EthereumRevocationRegistryController {
     } as ChangeStatusSignedOperation
   }
 
+  async generateChangeStatusSignedPayload(revoked: boolean, revocationKeyPath: RevocationKeyPath): Promise<ChangeStatusSignedOperation> {
+    return this._generateChangeStatusSignedPayload(revoked, revocationKeyPath)
+  }
+
   async changeStatusDelegated(revoked: boolean, revocationKeyPath: RevocationKeyPath): Promise<ContractTransaction> {
     this.validateRevocationKeyPath(revocationKeyPath);
     return this.registry.changeStatusDelegated(revoked, revocationKeyPath.namespace,  revocationKeyPath.list, revocationKeyPath.revocationKey);
   }
 
-  async changeStatusesInList(revocationListPath: RevocationListPath, revocationKeyInstructions: RevocationKeyInstruction[]): Promise<ContractTransaction> {
-    this.validateRevocationListPath(revocationListPath);
+  async changeStatusDelegatedSigned(signedOperation: ChangeStatusSignedOperation): Promise<ContractTransaction> {
+    return this._changeStatusSigned(signedOperation, true)
+  }
+
+  async generateChangeStatusDelegatedSignedPayload(revoked: boolean, revocationKeyPath: RevocationKeyPath): Promise<ChangeStatusSignedOperation> {
+    return this._generateChangeStatusSignedPayload(revoked, revocationKeyPath, true)
+  }
+
+  private convertRevocationKeyInstructions(revocationKeyInstructions: RevocationKeyInstruction[]): RevocationKeysAndStatuses {
     let revocationKeys: string[] = [];
     let revokedStatuses: boolean[] = [];
     revocationKeyInstructions.forEach((revocationKeyInstruction) => {
@@ -270,25 +346,112 @@ export class EthereumRevocationRegistryController {
       revocationKeys.push(revocationKeyInstruction.revocationKey);
       revokedStatuses.push(revocationKeyInstruction.revoked);
     })
-    return this.registry.changeStatusesInList(revokedStatuses, revocationListPath.namespace, revocationListPath.list, revocationKeys);
+
+    return {
+      revocationKeys: revocationKeys,
+      revokedStatuses: revokedStatuses
+    }
+  }
+
+  private async _changeStatusesInList(revocationListPath: RevocationListPath, revocationKeyInstructions: RevocationKeyInstruction[], delegatedCall: boolean = false): Promise<ContractTransaction> {
+    this.validateRevocationListPath(revocationListPath);
+    const keysAndStatuses: RevocationKeysAndStatuses = this.convertRevocationKeyInstructions(revocationKeyInstructions)
+
+    if(delegatedCall) {
+      return this.registry.changeStatusesInListDelegated(keysAndStatuses.revokedStatuses, revocationListPath.namespace, revocationListPath.list, keysAndStatuses.revocationKeys);
+    } else {
+      return this.registry.changeStatusesInList(keysAndStatuses.revokedStatuses, revocationListPath.namespace, revocationListPath.list, keysAndStatuses.revocationKeys);
+    }
+  }
+
+  async changeStatusesInList(revocationListPath: RevocationListPath, revocationKeyInstructions: RevocationKeyInstruction[]): Promise<ContractTransaction> {
+    return this._changeStatusesInList(revocationListPath, revocationKeyInstructions)
+  }
+
+  async _changeStatusesInListSigned(signedOperation: ChangeStatusesInListSignedOperation, delegatedCall: boolean = false): Promise<ContractTransaction> {
+    if(signedOperation.revocationKeyInstructions === undefined) throw new Error("revocationKeyInstructions must be set")
+    this.validateSignaturish(signedOperation)
+    this.validateRevocationListPath(signedOperation.revocationListPath)
+    await this.checkNonceForAddress(signedOperation.signer, signedOperation.nonce)
+    const revocationListPath = signedOperation.revocationListPath
+
+    const keysAndStatuses: RevocationKeysAndStatuses = this.convertRevocationKeyInstructions(signedOperation.revocationKeyInstructions)
+
+    if(delegatedCall) {
+      return this.registry.changeStatusesInListDelegatedSigned(
+          keysAndStatuses.revokedStatuses,
+          revocationListPath.namespace,
+          revocationListPath.list,
+          keysAndStatuses.revocationKeys,
+          signedOperation.signer,
+          signedOperation.signature,
+      )
+    } else {
+      return this.registry.changeStatusesInListSigned(
+          keysAndStatuses.revokedStatuses,
+          revocationListPath.namespace,
+          revocationListPath.list,
+          keysAndStatuses.revocationKeys,
+          signedOperation.signer,
+          signedOperation.signature,
+      )
+    }
+  }
+
+  async changeStatusesInListSigned(signedOperation: ChangeStatusesInListSignedOperation): Promise<ContractTransaction> {
+    return this._changeStatusesInListSigned(signedOperation)
+  }
+
+  async generateChangeStatusesInListSignedPayload(revocationListPath: RevocationListPath, revocationKeyInstructions: RevocationKeyInstruction[]): Promise<ChangeStatusesInListSignedOperation> {
+    return this._generateChangeStatusesInListSignedPayload(revocationListPath, revocationKeyInstructions)
   }
 
   async changeStatusesInListDelegated(revocationListPath: RevocationListPath, revocationKeyInstructions: RevocationKeyInstruction[]): Promise<ContractTransaction> {
-    this.validateRevocationListPath(revocationListPath);
-    let revocationKeys: string[] = [];
-    let revokedStatuses: boolean[] = [];
-    revocationKeyInstructions.forEach((revocationKeyInstruction) => {
-      if(!revocationKeyInstruction.revocationKey) {
-        throw new Error(`revocationKey in RevocationKeyInstruction must not be null!`)
-      }
-      if(revocationKeyInstruction.revoked === undefined) {
-        throw new Error(`revoked in RevocationKeyInstruction must not be null!`)
-      }
-      this.validateBytes32(revocationKeyInstruction.revocationKey);
-      revocationKeys.push(revocationKeyInstruction.revocationKey);
-      revokedStatuses.push(revocationKeyInstruction.revoked);
-    })
-    return this.registry.changeStatusesInListDelegated(revokedStatuses, revocationListPath.namespace, revocationListPath.list, revocationKeys);
+    return this._changeStatusesInList(revocationListPath, revocationKeyInstructions, true)
+  }
+
+  async changeStatusesInListDelegatedSigned(signedOperation: ChangeStatusesInListSignedOperation): Promise<ContractTransaction> {
+    return this._changeStatusesInListSigned(signedOperation, true)
+  }
+
+  async generateChangeStatusesInListDelegatedSignedPayload(revocationListPath: RevocationListPath, revocationKeyInstructions: RevocationKeyInstruction[]): Promise<ChangeStatusesInListSignedOperation> {
+    return this._generateChangeStatusesInListSignedPayload(revocationListPath, revocationKeyInstructions, true)
+  }
+
+  private async _generateChangeStatusesInListSignedPayload(revocationListPath: RevocationListPath, revocationKeyInstructions: RevocationKeyInstruction[], delegatedCall: boolean = false): Promise<ChangeStatusesInListSignedOperation> {
+    if(!this.typedDataDomain) {
+      this.typedDataDomain = await this.getEip712Domain()
+    }
+    if(!this.registry.signer) throw new Error("Please provide a signer in the constructor as it is required for the method to work!")
+    this.validateRevocationListPath(revocationListPath)
+    const signer = await this.registry.signer.getAddress()
+    const nonce = await this.registry.nonces(signer)
+
+    const keysAndStatuses: RevocationKeysAndStatuses = this.convertRevocationKeyInstructions(revocationKeyInstructions)
+
+    const values = {
+      revoked: keysAndStatuses.revokedStatuses,
+      namespace: revocationListPath.namespace,
+      revocationList: revocationListPath.list,
+      revocationKeys: keysAndStatuses.revocationKeys,
+      signer: signer,
+      nonce: nonce.toNumber()
+    }
+
+    let signature: string
+    if(delegatedCall) {
+      signature = await (this.registry.signer as Signer & TypedDataSigner)._signTypedData(this.typedDataDomain, EIP712ChangeStatusesInListDelegatedType, values)
+    } else {
+      signature = await (this.registry.signer as Signer & TypedDataSigner)._signTypedData(this.typedDataDomain, EIP712ChangeStatusesInListType, values)
+    }
+
+    return {
+      revocationListPath: revocationListPath,
+      revocationKeyInstructions: revocationKeyInstructions,
+      signer: signer,
+      signature: signature,
+      nonce: nonce
+    } as ChangeStatusesInListSignedOperation
   }
 
   async changeListOwner(revocationListPath: RevocationListPath, newOwner: string): Promise<ContractTransaction> {
@@ -297,19 +460,108 @@ export class EthereumRevocationRegistryController {
     return this.registry.changeListOwner(revocationListPath.namespace, newOwner, revocationListPath.list);
   }
 
+  async changeListOwnerSigned(signedOperation: ChangeListOwnerSignedOperation): Promise<ContractTransaction> {
+    const revocationListPath = signedOperation.revocationListPath
+    this.validateRevocationListPath(revocationListPath);
+    this.validateAddress(signedOperation.newOwner);
+    await this.checkNonceForAddress(signedOperation.signer, signedOperation.nonce)
+    // TODO: ARGUMENT ORDER OF WILL CHANGE 'changeListOwnerSigned'
+    return this.registry.changeListOwnerSigned(
+        revocationListPath.namespace,
+        signedOperation.newOwner,
+        revocationListPath.list,
+        signedOperation.signer,
+        signedOperation.signature
+    );
+  }
+
+  async generateChangeListOwnerSignedPayload(revocationListPath: RevocationListPath, newOwner: string): Promise<ChangeListOwnerSignedOperation> {
+    if(!this.typedDataDomain) {
+      this.typedDataDomain = await this.getEip712Domain()
+    }
+    if(!this.registry.signer) throw new Error("Please provide a signer in the constructor as it is required for the method to work!")
+    this.validateRevocationListPath(revocationListPath)
+    this.validateAddress(newOwner)
+    const signer = await this.registry.signer.getAddress()
+    const nonce = await this.registry.nonces(signer)
+
+    const values = {
+      namespace: revocationListPath.namespace,
+      newOwner: newOwner,
+      revocationList: revocationListPath.list,
+      signer: signer,
+      nonce: nonce.toNumber()
+    }
+
+    const signature = await (this.registry.signer as Signer & TypedDataSigner)._signTypedData(this.typedDataDomain, EIP712ChangeListOwnerType, values)
+
+    return {
+      revocationListPath: revocationListPath,
+      newOwner: newOwner,
+      signer: signer,
+      signature: signature,
+      nonce: nonce
+    } as ChangeListOwnerSignedOperation
+  }
+
   async addListDelegate(revocationListPath: RevocationListPath, delegate: string, expiryDate: Date): Promise<ContractTransaction> {
     this.validateRevocationListPath(revocationListPath);
     this.validateAddress(delegate);
-    if(!expiryDate) {
-      throw new Error("expiryDate must not be null")
-    }
-    const today = new Date(Date.now())
-    if(expiryDate < today) {
-      throw new Error("expiryDate must not be in the future")
-    }
-    const expiryDateEpochSeconds = expiryDate.getTime() / 1000;
+    this.validateExpiryDateIsInFuture(expiryDate)
+    const expiryDateEpochSeconds = Math.floor(expiryDate.getTime() / 1000);
 
     return this.registry.addListDelegate(revocationListPath.namespace, delegate, revocationListPath.list, expiryDateEpochSeconds);
+  }
+
+  async addListDelegateSigned(signedOperation: AddListDelegateSignedOperation): Promise<ContractTransaction> {
+    const revocationListPath = signedOperation.revocationListPath
+    this.validateRevocationListPath(revocationListPath);
+    this.validateAddress(signedOperation.delegate);
+    await this.checkNonceForAddress(signedOperation.signer, signedOperation.nonce)
+    if(!signedOperation.expiryDate) {
+      throw new Error("expiryDate must not be null")
+    }
+    this.validateExpiryDateIsInFuture(signedOperation.expiryDate)
+    const expiryDateEpochSeconds = Math.floor(signedOperation.expiryDate.getTime() / 1000);
+
+    return this.registry.addListDelegate(
+        revocationListPath.namespace,
+        signedOperation.delegate,
+        revocationListPath.list,
+        expiryDateEpochSeconds
+    );
+  }
+
+  async generateAddListDelegateSignedPayload(revocationListPath: RevocationListPath, delegate: string, expiryDate: Date): Promise<AddListDelegateSignedOperation> {
+    if(!this.typedDataDomain) {
+      this.typedDataDomain = await this.getEip712Domain()
+    }
+    if(!this.registry.signer) throw new Error("Please provide a signer in the constructor as it is required for the method to work!")
+    this.validateRevocationListPath(revocationListPath)
+    this.validateAddress(delegate)
+    this.validateExpiryDateIsInFuture(expiryDate)
+    const expiryDateEpochSeconds = Math.floor(expiryDate.getTime() / 1000);
+    const signer = await this.registry.signer.getAddress()
+    const nonce = await this.registry.nonces(signer)
+
+    const values = {
+      namespace: revocationListPath.namespace,
+      delegate: delegate,
+      revocationList: revocationListPath.list,
+      validity: expiryDateEpochSeconds,
+      signer: signer,
+      nonce: nonce.toNumber()
+    }
+
+    const signature = await (this.registry.signer as Signer & TypedDataSigner)._signTypedData(this.typedDataDomain, EIP712AddListDelegateType, values)
+
+    return {
+      revocationListPath: revocationListPath,
+      delegate: delegate,
+      expiryDate: expiryDate,
+      signature: signature,
+      nonce: nonce
+    } as AddListDelegateSignedOperation
   }
 
   async removeListDelegate(revocationListPath: RevocationListPath, delegate: string): Promise<ContractTransaction> {
@@ -318,4 +570,92 @@ export class EthereumRevocationRegistryController {
 
     return this.registry.removeListDelegate(revocationListPath.namespace, delegate, revocationListPath.list);
   }
+
+  async removeListDelegateSigned(signedOperation: RemoveListDelegateSignedOperation): Promise<ContractTransaction> {
+    const revocationListPath = signedOperation.revocationListPath
+    this.validateRevocationListPath(revocationListPath);
+    this.validateAddress(signedOperation.delegate);
+    await this.checkNonceForAddress(signedOperation.signer, signedOperation.nonce)
+
+    return this.registry.removeListDelegate(revocationListPath.namespace, signedOperation.delegate, revocationListPath.list);
+  }
+
+  async generateRemoveListDelegateSignedPayload(revocationListPath: RevocationListPath, delegate: string): Promise<RemoveListDelegateSignedOperation> {
+    if(!this.typedDataDomain) {
+      this.typedDataDomain = await this.getEip712Domain()
+    }
+    if(!this.registry.signer) throw new Error("Please provide a signer in the constructor as it is required for the method to work!")
+    this.validateRevocationListPath(revocationListPath)
+    this.validateAddress(delegate)
+    const signer = await this.registry.signer.getAddress()
+    const nonce = await this.registry.nonces(signer)
+
+    const values = {
+      namespace: revocationListPath.namespace,
+      delegate: delegate,
+      revocationList: revocationListPath.list,
+      signer: signer,
+      nonce: nonce.toNumber()
+    }
+
+    const signature = await (this.registry.signer as Signer & TypedDataSigner)._signTypedData(this.typedDataDomain, EIP712RemoveListDelegateType, values)
+
+    return {
+      revocationListPath: revocationListPath,
+      delegate: delegate,
+      signer: signer,
+      signature: signature,
+      nonce: nonce
+    } as RemoveListDelegateSignedOperation
+  }
+
+  async changeListStatus(revoked: boolean, revocationListPath: RevocationListPath): Promise<ContractTransaction> {
+    if(revoked === undefined) throw new Error("revoked must be set")
+    this.validateRevocationListPath(revocationListPath)
+    return this.registry.changeListStatus(revoked, revocationListPath.namespace, revocationListPath.list)
+  }
+
+  async changeListStatusSigned(signedOperation: ChangeListStatusSignedOperation): Promise<ContractTransaction> {
+    if(signedOperation.revoked === undefined) throw new Error("revoked must be set")
+    const revocationListPath = signedOperation.revocationListPath
+    this.validateRevocationListPath(revocationListPath)
+    await this.checkNonceForAddress(signedOperation.signer, signedOperation.nonce)
+
+    return this.registry.changeListStatusSigned(
+        signedOperation.revoked,
+        revocationListPath.namespace,
+        revocationListPath.list,
+        signedOperation.signer,
+        signedOperation.signature
+    )
+  }
+
+  async generateChangeListStatusSignedPayload(revoked: boolean, revocationListPath: RevocationListPath): Promise<ChangeListStatusSignedOperation> {
+    if(!this.typedDataDomain) {
+      this.typedDataDomain = await this.getEip712Domain()
+    }
+    if(!this.registry.signer) throw new Error("Please provide a signer in the constructor as it is required for the method to work!")
+    this.validateRevocationListPath(revocationListPath)
+    const signer = await this.registry.signer.getAddress()
+    const nonce = await this.registry.nonces(signer)
+
+    const values = {
+      revoked: revoked,
+      namespace: revocationListPath.namespace,
+      revocationList: revocationListPath.list,
+      signer: signer,
+      nonce: nonce.toNumber()
+    }
+
+    const signature = await (this.registry.signer as Signer & TypedDataSigner)._signTypedData(this.typedDataDomain, EIP712ChangeListStatusType, values)
+
+    return {
+      revoked: revoked,
+      revocationListPath: revocationListPath,
+      signer: signer,
+      signature: signature,
+      nonce: nonce
+    } as ChangeListStatusSignedOperation
+  }
+
 }

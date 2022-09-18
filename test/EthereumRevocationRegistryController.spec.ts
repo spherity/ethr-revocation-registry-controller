@@ -14,13 +14,27 @@ import {TypedEvent} from "@spherity/ethr-revocation-registry/types/ethers-v5/com
 import {TypedDataSigner} from "@ethersproject/abstract-signer";
 import {ChangeStatusSignedOperation} from "../dist/src/EthereumRevocationRegistryController";
 import {BigNumber} from "@ethersproject/bignumber";
+import {Network, Provider} from "@ethersproject/providers";
+import {EIP712DomainName} from "@spherity/ethr-revocation-registry";
 
 jest.setTimeout(30000)
 
 const validAddress = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
 describe('EthrRevocationRegistryController', () => {
   let registry: EthereumRevocationRegistryController;
+  let registryWithoutSigner: EthereumRevocationRegistryController;
+  const networkMock = {
+    chainId: 1,
+    name: "Mocked Network",
+  } as Network
+  const signerMock = {
+    getAddress: jest.fn(),
+    _signTypedData: jest.fn()
+  } as unknown as Signer & TypedDataSigner
+  const addressMock = "mockedRegistryAddress"
+  const contractVersion = "1.0.0"
   const registryContractMock = {
+    address: addressMock,
     isRevoked: jest.fn(),
     changeStatus: jest.fn(),
     changeStatusSigned: jest.fn(),
@@ -30,21 +44,40 @@ describe('EthrRevocationRegistryController', () => {
     changeListOwner: jest.fn(),
     addListDelegate: jest.fn(),
     removeListDelegate: jest.fn(),
+    changeListStatus: jest.fn(),
     queryFilter: jest.fn(),
     filters: {
       RevocationListStatusChanged: jest.fn(),
       RevocationStatusChanged: jest.fn(),
     },
-    nonces: jest.fn()
-  } as unknown as RevocationRegistry;
-
-  const signerMock = {
-
-  } as unknown as Signer & TypedDataSigner;
-  const addressMock = "";
+    signer: signerMock,
+    nonces: jest.fn(),
+    version: jest.fn(),
+    provider: {
+      getNetwork: jest.fn(),
+    } as any as Provider
+  } as unknown as RevocationRegistry
+  const providerMock = {} as unknown as Provider
 
   beforeAll(async () => {
-    registry = new EthereumRevocationRegistryController({contract: registryContractMock, signer: signerMock, address: addressMock});
+    registry = new EthereumRevocationRegistryController({
+      contract: registryContractMock,
+      provider: providerMock,
+      signer: signerMock,
+      address: addressMock
+    });
+    registryWithoutSigner = new EthereumRevocationRegistryController({
+      contract: registryContractMock,
+      provider: providerMock,
+      address: addressMock
+    });
+  })
+
+  beforeEach(async () => {
+    when(registryContractMock.provider.getNetwork).mockResolvedValue(networkMock)
+    when(registryContractMock.version).mockResolvedValue(contractVersion)
+    when(registryContractMock.version).mockResolvedValue(contractVersion)
+    when(registryContractMock.signer.getAddress).mockResolvedValue(validAddress)
   })
 
   afterEach(async () => {
@@ -715,6 +748,43 @@ describe('EthrRevocationRegistryController', () => {
     })
   })
 
+  describe('generateChangeStatusSignedPayload input verification', () => {
+    it('should return a ChangeStatusSignedOperation', async () => {
+      const revocationStatus = true
+      const nonce = BigNumber.from(0)
+      const signature = "mockedSignature"
+      const revocationKeyPath: RevocationKeyPath = {
+        namespace: validAddress,
+        list: web3.utils.keccak256("list"),
+        revocationKey: web3.utils.keccak256("revocationKey")
+      }
+      when(signerMock.getAddress).mockResolvedValue(validAddress)
+      when(signerMock._signTypedData).calledWith({
+        name: EIP712DomainName,
+        version: contractVersion,
+        chainId: networkMock.chainId,
+        verifyingContract: addressMock
+      }, expect.anything(), expect.anything()).mockResolvedValue(signature)
+      when(registryContractMock.nonces).calledWith(validAddress).mockResolvedValue(nonce)
+      expect(registry.generateChangeStatusSignedPayload(revocationStatus, revocationKeyPath)).resolves.toEqual({
+        revoked: revocationStatus,
+        revocationKeyPath: revocationKeyPath,
+        signer: validAddress,
+        signature: signature,
+        nonce: nonce
+      })
+    })
+
+    it('should return an error, because no signer was given', async () => {
+      const revocationKeyPath: RevocationKeyPath = {
+        namespace: validAddress,
+        list: web3.utils.keccak256("list"),
+        revocationKey: web3.utils.keccak256("revocationKey")
+      }
+      expect(registryWithoutSigner.generateChangeStatusSignedPayload(true, revocationKeyPath)).rejects.toThrow(Error)
+    })
+  })
+
   describe('changeStatusesInList input verification', () => {
     it('should let valid parameters pass', async () => {
       const revocationStatus: boolean = true;
@@ -853,7 +923,6 @@ describe('EthrRevocationRegistryController', () => {
 
   describe('changeStatusesInListDelegated input verification', () => {
     it('should let valid parameters pass', async () => {
-      const revocationStatus: boolean = true;
       const revocationListPath: RevocationListPath = {
         namespace: validAddress,
         list: web3.utils.keccak256("listname"),
@@ -1063,7 +1132,7 @@ describe('EthrRevocationRegistryController', () => {
         list: web3.utils.keccak256("listname"),
       }
       const expiryDate = GetDateForTodayPlusDays(5);
-      const expiryDateInSeconds = expiryDate.getTime()/1000;
+      const expiryDateInSeconds = Math.floor(expiryDate.getTime()/1000);
 
       expect(registry.addListDelegate(revocationListPath, validAddress, expiryDate)).resolves;
       expect(registryContractMock.addListDelegate).toHaveBeenCalledTimes(1);
@@ -1245,6 +1314,64 @@ describe('EthrRevocationRegistryController', () => {
 
         expect(registry.removeListDelegate(revocationListPath, web3.utils.keccak256("invalidaddress"))).rejects.toThrow(Error);
         expect(registryContractMock.removeListDelegate).toHaveBeenCalledTimes(0);
+      })
+    })
+  })
+
+  describe('changeListStatus input verification', () => {
+    it('should let valid parameters pass', async () => {
+      const revocationStatus: boolean = true;
+      const revocationListPath: RevocationListPath = {
+        namespace: validAddress,
+        list: web3.utils.keccak256("listname"),
+      }
+
+      expect(registry.changeListStatus(revocationStatus, revocationListPath)).resolves;
+      expect(registryContractMock.changeListStatus).toHaveBeenCalledTimes(1);
+      expect(registryContractMock.changeListStatus).toHaveBeenCalledWith(revocationStatus, revocationListPath.namespace, revocationListPath.list);
+    })
+    describe('namespace in revocationListPath', () => {
+      it('should notice emptiness', async () => {
+        const revocationStatus: boolean = true;
+        const revocationListPath: RevocationListPath = {
+          namespace: "",
+          list: web3.utils.keccak256("listname"),
+        }
+
+        expect(registry.changeListStatus(revocationStatus, revocationListPath)).rejects.toThrow(Error);
+        expect(registryContractMock.changeListStatus).toHaveBeenCalledTimes(0);
+      })
+      it('should notice invalid address', async () => {
+        const revocationStatus: boolean = true;
+        const revocationListPath: RevocationListPath = {
+          namespace: web3.utils.keccak256("invalidAddress"),
+          list: web3.utils.keccak256("listname"),
+        }
+
+        expect(registry.changeListStatus(revocationStatus, revocationListPath)).rejects.toThrow(Error);
+        expect(registryContractMock.changeListStatus).toHaveBeenCalledTimes(0);
+      })
+    })
+    describe('for list in revocationListPath', () => {
+      it('should notice emptiness', async () => {
+        const revocationStatus: boolean = true;
+        const revocationListPath: RevocationListPath = {
+          namespace: validAddress,
+          list: "",
+        }
+
+        expect(registry.changeListStatus(revocationStatus, revocationListPath)).rejects.toThrow(Error);
+        expect(registryContractMock.changeListStatus).toHaveBeenCalledTimes(0);
+      })
+      it('should notice invalid bytes32', async () => {
+        const revocationStatus: boolean = true;
+        const revocationListPath: RevocationListPath = {
+          namespace: validAddress,
+          list: validAddress,
+        }
+
+        expect(registry.changeListStatus(revocationStatus, revocationListPath)).rejects.toThrow(Error);
+        expect(registryContractMock.changeListStatus).toHaveBeenCalledTimes(0);
       })
     })
   })
