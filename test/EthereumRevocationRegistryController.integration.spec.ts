@@ -223,16 +223,13 @@ describe('EthrRevocationRegistryController', () => {
 
   describe('AddListDelegateSigned', () => {
     it('Separate signer creates a signed payload for the initial controller to send out', async () => {
-      const payload = await typedDataSignableController.generateChangeListOwnerSignedPayload(generateRevocationListPathForAccount(typedDataSigner.address), secondTypedDataSigner.address)
-      const transaction = await controller.changeListOwnerSigned(payload)
+      const revocationStatus = true
+      const payload = await typedDataSignableController.generateAddListDelegateSignedPayload(generateRevocationListPathForAccount(typedDataSigner.address), secondTypedDataSigner.address, GetDateForTodayPlusDays(5))
+      const transaction = await controller.addListDelegateSigned(payload)
       expect(transaction.wait()).resolves
-      expect(registry.identityIsOwner(typedDataSigner.address, generateRevocationKeyPathForAccount(typedDataSigner.address).list, secondTypedDataSigner.address)).resolves.toEqual(true)
-      // DOES CHANGE OWNER REALLY WORK?
-      // await sleepForMs(5000)
-      // const transaction2 = await secondTypedDataSignableController.changeStatus(revocationStatus, generateRevocationKeyPathForAccount(typedDataSigner.address))
-      // expect(transaction2.wait()).resolves
-      // expect(controller.isRevoked(generateRevocationKeyPathForAccount(typedDataSigner.address))).resolves.toEqual(revocationStatus)
-      //
+      const transaction2 = await secondTypedDataSignableController.changeStatusDelegated(revocationStatus, generateRevocationKeyPathForAccount(typedDataSigner.address))
+      expect(transaction2.wait()).resolves
+      expect(controller.isRevoked(generateRevocationKeyPathForAccount(typedDataSigner.address))).resolves.toEqual(revocationStatus)
     });
   });
 })

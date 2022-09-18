@@ -559,6 +559,7 @@ export class EthereumRevocationRegistryController {
       revocationListPath: revocationListPath,
       delegate: delegate,
       expiryDate: expiryDate,
+      signer: signer,
       signature: signature,
       nonce: nonce
     } as AddListDelegateSignedOperation
