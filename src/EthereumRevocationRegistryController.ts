@@ -107,7 +107,7 @@ export class EthereumRevocationRegistryController {
       this.registry = new factories.RevocationRegistry__factory()
         .attach(address || DEFAULT_REGISTRY_ADDRESS)
         .connect(prov!)
-    } else {
+    }else {
       throw new Error("Either a contract instance, a provider or a rpcUrl is required to initialize!")
     }
     this.address = address

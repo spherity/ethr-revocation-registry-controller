@@ -31,20 +31,20 @@ npm install --save @spherity/ethr-revocation-registry-controller
 You can then build the controller object by instantiating it for example with a HttpProvider connected to Infura:
 
 ```javascript
-const provider = new Web3.providers.HttpProvider(
-  `https://${network}.infura.io/v3/${process.env.INFURA_API_KEY}`
-)
-const signer = web3.eth.accounts.privateKeyToAccount(
-  process.env.SIGNER_PRIVATE_KEY
-);
+const revocation = require('@spherity/ethr-revocation-registry-controller');
+const { ethers } = require("ethers");
 
-const config: EthereumRevocationRegistryControllerConfig = {
-  provider: provider,
-  signer: signer
+const provider = new ethers.providers.InfuraProvider.getWebSocketProvider("goerli", "XXXXXXXXXXXXXXXXXXXX");
+const signer = new ethers.Wallet.createRandom()
+const signerAndProvider = signer.connect(provider)
+
+const config = {
+    signer: signerAndProvider,
+    address: "0x185D1Cf733e2C85A7Eda4f188036baA5b7a11182",
 }
-
-const controller = new EthereumRevocationRegistryController(config);
 ```
+**Make sure to provide a TypedDataSigner if you intend to use Meta transactions (for example 'Wallet')!**
+
 Now you're ready to interact with your revocation lists/keys!
 
 ## Development
