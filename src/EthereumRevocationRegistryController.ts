@@ -25,6 +25,7 @@ import {
 import {TypedDataSigner} from "@ethersproject/abstract-signer";
 import {BigNumber} from "@ethersproject/bignumber";
 import {RevocationKeysAndStatuses} from "./types/RevocationKeysAndStatuses";
+import {Networkish} from "@ethersproject/networks/src.ts/types";
 
 export const DEFAULT_REGISTRY_ADDRESS = '0x00000000000000000000000'
 
@@ -74,7 +75,7 @@ export interface EthereumRevocationRegistryControllerConfig {
   provider?: Provider,
   signer?: Signer & TypedDataSigner,
   rpcUrl?: string,
-  chainNameOrId?: string,
+  network?: Networkish,
   address?: string;
 }
 
@@ -100,19 +101,19 @@ export class EthereumRevocationRegistryController {
       this.registry = new factories.RevocationRegistry__factory()
           .attach(address)
           .connect(config.provider)
-    } else if(config.rpcUrl && config.signer && config.chainNameOrId) {
-      const provider = new JsonRpcProvider(config.rpcUrl, config.chainNameOrId)
+    } else if(config.rpcUrl && config.signer && config.network) {
+      const provider = new JsonRpcProvider(config.rpcUrl, config.network)
       const attachedSigner = config.signer.connect(provider)
       this.registry = new factories.RevocationRegistry__factory()
           .attach(address)
           .connect(attachedSigner)
-    } else if(config.rpcUrl && !config.signer && config.chainNameOrId) {
-      const provider = new JsonRpcProvider(config.rpcUrl, config.chainNameOrId)
+    } else if(config.rpcUrl && !config.signer && config.network) {
+      const provider = new JsonRpcProvider(config.rpcUrl, config.network)
       this.registry = new factories.RevocationRegistry__factory()
           .attach(address)
           .connect(provider)
     } else {
-      throw new Error("Either a contract instance, a provider with optional signer or a RPCUrl with a chainNameOrId with optional signer must be provided")
+      throw new Error("Either a contract instance, a provider with optional signer or a RPCUrl with a network with optional signer must be provided")
     }
   }
 
