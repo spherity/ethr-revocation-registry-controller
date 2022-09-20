@@ -100,19 +100,19 @@ export class EthereumRevocationRegistryController {
       this.registry = new factories.RevocationRegistry__factory()
           .attach(address)
           .connect(config.provider)
-    } else if(config.rpcUrl && config.signer) {
-      const provider = new JsonRpcProvider(config.rpcUrl, config.chainNameOrId || 'any')
+    } else if(config.rpcUrl && config.signer && config.chainNameOrId) {
+      const provider = new JsonRpcProvider(config.rpcUrl, config.chainNameOrId)
       const attachedSigner = config.signer.connect(provider)
       this.registry = new factories.RevocationRegistry__factory()
           .attach(address)
           .connect(attachedSigner)
-    } else if(config.rpcUrl && !config.signer) {
-      const provider = new JsonRpcProvider(config.rpcUrl, config.chainNameOrId || 'any')
+    } else if(config.rpcUrl && !config.signer && config.chainNameOrId) {
+      const provider = new JsonRpcProvider(config.rpcUrl, config.chainNameOrId)
       this.registry = new factories.RevocationRegistry__factory()
           .attach(address)
           .connect(provider)
     } else {
-      throw new Error("Either a contract instance, a provider with optional signer or a RPCUrl with optional signer must be provided")
+      throw new Error("Either a contract instance, a provider with optional signer or a RPCUrl with a chainNameOrId with optional signer must be provided")
     }
   }
 
