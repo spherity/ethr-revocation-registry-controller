@@ -73,7 +73,7 @@ export type ChangeListStatusSignedOperation = Signaturish & {
 export interface EthereumRevocationRegistryControllerConfig {
   contract?: RevocationRegistry,
   provider?: Provider,
-  signer?: Signer & TypedDataSigner,
+  signer?: Signer,
   rpcUrl?: string,
   network?: Networkish,
   address?: string;
@@ -128,6 +128,13 @@ export class EthereumRevocationRegistryController {
       chainId: chainId,
       verifyingContract: this.registry.address
     } as TypedDataDomain
+  }
+
+  public async getSignerAddress(): Promise<string> {
+    if(!this.registry.signer) {
+      throw new Error("Controller has no signer!")
+    }
+    return this.registry.signer.getAddress()
   }
 
   private validateSignaturish(signaturish: Signaturish) {
