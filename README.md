@@ -34,7 +34,7 @@ You can then build the controller object by instantiating it for example with a 
 const revocation = require('@spherity/ethr-revocation-registry-controller');
 const { ethers } = require("ethers");
 
-const provider = new ethers.providers.InfuraProvider.getWebSocketProvider("goerli", "XXXXXXXXXXXXXXXXXXXX");
+const provider = new InfuraWebSocketProvider("goerli", "XXXXXXXXXXXXXXXXXXXX");
 const signer = new ethers.Wallet.createRandom()
 const signerAndProvider = signer.connect(provider)
 

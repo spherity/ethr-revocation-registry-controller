@@ -25,6 +25,7 @@ import {
 import {TypedDataSigner} from "@ethersproject/abstract-signer";
 import {BigNumber} from "@ethersproject/bignumber";
 import {RevocationKeysAndStatuses} from "./types/RevocationKeysAndStatuses";
+import {Networkish} from "@ethersproject/networks/src.ts/types";
 
 export const DEFAULT_REGISTRY_ADDRESS = '0x00000000000000000000000'
 
@@ -72,9 +73,9 @@ export type ChangeListStatusSignedOperation = Signaturish & {
 export interface EthereumRevocationRegistryControllerConfig {
   contract?: RevocationRegistry,
   provider?: Provider,
-  signer?: Signer & TypedDataSigner,
+  signer?: Signer,
   rpcUrl?: string,
-  chainNameOrId?: string,
+  network?: Networkish,
   address?: string;
 }
 
@@ -85,32 +86,35 @@ export interface IsRevokedOptions {
 
 export class EthereumRevocationRegistryController {
   private registry: RevocationRegistry
-  private address: string
   private typedDataDomain: TypedDataDomain | undefined
 
   constructor(config: EthereumRevocationRegistryControllerConfig) {
     const address = config.address !== undefined ? config.address : DEFAULT_REGISTRY_ADDRESS;
+
     if (config.contract) {
       this.registry = config.contract
-      this.address = config.contract.address
-    } else if (config.provider || config.signer?.provider || config.rpcUrl) {
-      let prov = config.provider || config.signer?.provider
-      if(!prov && config.rpcUrl) {
-        prov = new JsonRpcProvider(config.rpcUrl, config.chainNameOrId || 'any')
-        // TO-DO: SignTypedData with jsonrpc provider research
-        // https://github.com/ethers-io/ethers.js/commit/15a90af5be75806e26f589f0a3f3687c0fb1c672
-      }
-      if (!prov && !config.rpcUrl) {
-        throw new Error("Provider and/org rpcUrl required if contract isn't specified!")
-      }
-      this.validateAddress(address);
+    } else if(config.signer && config.signer.provider) {
       this.registry = new factories.RevocationRegistry__factory()
-        .attach(address || DEFAULT_REGISTRY_ADDRESS)
-        .connect(prov!)
-    }else {
-      throw new Error("Either a contract instance, a provider or a rpcUrl is required to initialize!")
+        .attach(address)
+        .connect(config.signer)
+    } else if(config.provider && !config.signer) {
+      this.registry = new factories.RevocationRegistry__factory()
+          .attach(address)
+          .connect(config.provider)
+    } else if(config.rpcUrl && config.signer && config.network) {
+      const provider = new JsonRpcProvider(config.rpcUrl, config.network)
+      const attachedSigner = config.signer.connect(provider)
+      this.registry = new factories.RevocationRegistry__factory()
+          .attach(address)
+          .connect(attachedSigner)
+    } else if(config.rpcUrl && !config.signer && config.network) {
+      const provider = new JsonRpcProvider(config.rpcUrl, config.network)
+      this.registry = new factories.RevocationRegistry__factory()
+          .attach(address)
+          .connect(provider)
+    } else {
+      throw new Error("Either a contract instance, a provider with optional signer or a RPCUrl with a network with optional signer must be provided")
     }
-    this.address = address
   }
 
   private async getEip712Domain(): Promise<TypedDataDomain> {
@@ -122,8 +126,15 @@ export class EthereumRevocationRegistryController {
       name: "Revocation Registry",
       version: version,
       chainId: chainId,
-      verifyingContract: this.address
+      verifyingContract: this.registry.address
     } as TypedDataDomain
+  }
+
+  public async getSignerAddress(): Promise<string> {
+    if(!this.registry.signer) {
+      throw new Error("Controller has no signer!")
+    }
+    return this.registry.signer.getAddress()
   }
 
   private validateSignaturish(signaturish: Signaturish) {
