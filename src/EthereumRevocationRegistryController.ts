@@ -19,7 +19,7 @@ import {
   EIP712ChangeStatusDelegatedType,
   EIP712ChangeStatusesInListDelegatedType,
   EIP712ChangeStatusesInListType,
-  EIP712ChangeStatusType,
+  EIP712ChangeStatusType, EIP712DomainName,
   EIP712RemoveListDelegateType
 } from "@spherity/ethr-revocation-registry";
 import {TypedDataSigner} from "@ethersproject/abstract-signer";
@@ -123,7 +123,7 @@ export class EthereumRevocationRegistryController {
     const chainId = network.chainId
 
     return {
-      name: "Revocation Registry",
+      name: EIP712DomainName,
       version: version,
       chainId: chainId,
       verifyingContract: this.registry.address
@@ -225,8 +225,8 @@ export class EthereumRevocationRegistryController {
     let queryFilterReturnValues;
     try {
       queryFilterReturnValues = await Promise.all([
-        this.registry.queryFilter(this.registry.filters.RevocationListStatusChanged()),
-        this.registry.queryFilter(this.registry.filters.RevocationStatusChanged()),
+        this.registry.queryFilter(this.registry.filters.RevocationListStatusChanged(revocationKeyPath.namespace, revocationKeyPath.list)),
+        this.registry.queryFilter(this.registry.filters.RevocationStatusChanged(revocationKeyPath.namespace, revocationKeyPath.list, revocationKeyPath.revocationKey)),
       ]);
     } catch(error) {
       throw new Error("Cannot fetch revocation state due error fetching events of contract: " + error)
