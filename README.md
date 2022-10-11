@@ -28,7 +28,7 @@ Execute this to install this dependency:
 npm install --save @spherity/ethr-revocation-registry-controller
 ```
 
-You can then build the controller object by instantiating it for example with a HttpProvider connected to Infura:
+You can then build the controller object by instantiating it for example with a WebsocketProvider connected to Infura:
 
 ```javascript
 const revocation = require('@spherity/ethr-revocation-registry-controller');
