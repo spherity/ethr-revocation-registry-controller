@@ -20,14 +20,15 @@ import {
   EIP712ChangeStatusesInListDelegatedType,
   EIP712ChangeStatusesInListType,
   EIP712ChangeStatusType, EIP712DomainName,
-  EIP712RemoveListDelegateType
+  EIP712RemoveListDelegateType,
+  getRevocationRegistryDeploymentAddress
 } from "@spherity/ethr-revocation-registry";
 import {TypedDataSigner} from "@ethersproject/abstract-signer";
 import {BigNumber} from "@ethersproject/bignumber";
 import {RevocationKeysAndStatuses} from "./types/RevocationKeysAndStatuses";
 import {Networkish} from "@ethersproject/networks/src.ts/types";
 
-export const DEFAULT_REGISTRY_ADDRESS = '0x00000000000000000000000'
+const DEFAULT_REGISTRY_CHAIN_ID = 1
 
 type TimestampedEvent = TypedEvent & {
   timestamp: number
@@ -77,6 +78,7 @@ export interface EthereumRevocationRegistryControllerConfig {
   rpcUrl?: string,
   network?: Networkish,
   address?: string;
+  chainId?: number;
 }
 
 export interface IsRevokedOptions {
@@ -89,7 +91,10 @@ export class EthereumRevocationRegistryController {
   private typedDataDomain: TypedDataDomain | undefined
 
   constructor(config: EthereumRevocationRegistryControllerConfig) {
-    const address = config.address !== undefined ? config.address : DEFAULT_REGISTRY_ADDRESS;
+    const chainId = config.chainId !== undefined ? config.chainId : DEFAULT_REGISTRY_CHAIN_ID
+    const address = config.address !== undefined
+      ? config.address
+      : getRevocationRegistryDeploymentAddress(chainId)
 
     if (config.contract) {
       this.registry = config.contract
