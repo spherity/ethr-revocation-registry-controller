@@ -1,4 +1,4 @@
-import {RevocationRegistry} from "@spherity/ethr-revocation-registry/types/ethers-v5";
+import {RevocationRegistry} from "@spherity/ethr-revocation-registry/types/ethers-v6";
 import {
   EthereumRevocationRegistryController,
   RevocationKeyInstruction,
@@ -10,11 +10,11 @@ import web3 from "web3";
 import {GetDateForTodayPlusDays} from "./testUtils";
 import {when} from 'jest-when'
 import {Block} from "@ethersproject/abstract-provider";
-import {TypedEvent} from "@spherity/ethr-revocation-registry/types/ethers-v5/common";
+import {TypedContractEvent} from "@spherity/ethr-revocation-registry/types/ethers-v6/common";
 import {TypedDataSigner} from "@ethersproject/abstract-signer";
 import {ChangeStatusSignedOperation} from "../dist/src/EthereumRevocationRegistryController";
 import {BigNumber} from "@ethersproject/bignumber";
-import {Network, Provider} from "@ethersproject/providers";
+import {Network, Provider} from "ethers";
 import {EIP712DomainName} from "@spherity/ethr-revocation-registry";
 
 jest.setTimeout(30000)
@@ -26,7 +26,7 @@ describe('EthrRevocationRegistryController', () => {
   const networkMock = {
     chainId: 1,
     name: "Mocked Network",
-  } as Network
+  } as any as Network
   const signerMock = {
     getAddress: jest.fn(),
     _signTypedData: jest.fn()

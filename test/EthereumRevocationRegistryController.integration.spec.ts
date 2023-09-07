@@ -1,12 +1,12 @@
 import {createProvider, GetDateForTodayPlusDays, sleepForMs} from './testUtils'
-import {RevocationRegistry, factories} from "@spherity/ethr-revocation-registry/types/ethers-v5";
+import {RevocationRegistry, factories} from "@spherity/ethr-revocation-registry/types/ethers-v6";
 import {
   EthereumRevocationRegistryController,
   RevocationKeyInstruction,
   RevocationKeyPath,
   RevocationListPath
 } from "../src";
-import {Wallet} from "@ethersproject/wallet";
+import {Wallet} from "ethers";
 import web3 from "web3";
 
 jest.setTimeout(30000)
@@ -42,15 +42,18 @@ describe('EthrRevocationRegistryController', () => {
   const web3Provider = createProvider()
 
   beforeEach(async () => {
-    const factory = new factories.RevocationRegistry__factory().connect(web3Provider.getSigner(0))
+    const factory = new factories.RevocationRegistry__factory().connect(await web3Provider.getSigner(0))
     registry = await factory.deploy()
-    registry = await registry.deployed()
+    const deploymentTx = await registry.deploymentTransaction();
+    if(!deploymentTx) throw new Error("Couldn't fetch deployment TX for registry contract");
+    await deploymentTx.wait();
 
-    await registry.deployTransaction.wait()
+    const accountProviders = await web3Provider.listAccounts();
+    accounts = await Promise.all(accountProviders.map(async (account) => await account.getAddress()));
 
-    accounts = await web3Provider.listAccounts()
+    const registryAddress = await registry.getAddress();
 
-    controller = new EthereumRevocationRegistryController({contract: registry, provider: web3Provider, address: registry.address})
+    controller = new EthereumRevocationRegistryController({contract: registry, provider: web3Provider, address: registryAddress})
 
     typedDataSigner = new Wallet("0x278a5de700e29faae8e40e366ec5012b5ec63d36ec77e8a2417154cc1d25383f", web3Provider)
     typedDataSignableRegistry = registry.connect(typedDataSigner)
@@ -58,7 +61,7 @@ describe('EthrRevocationRegistryController', () => {
       contract: typedDataSignableRegistry,
       provider: web3Provider,
       signer: typedDataSigner,
-      address: registry.address
+      address: registryAddress
     })
 
     secondTypedDataSigner = new Wallet("0x0000000000000000000000000000000000000000000000000000000000000005", web3Provider)
@@ -67,7 +70,7 @@ describe('EthrRevocationRegistryController', () => {
       contract: secondTypedDataSignableRegistry,
       provider: web3Provider,
       signer: secondTypedDataSigner,
-      address: registry.address
+      address: registryAddress
     })
   })
 

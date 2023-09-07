@@ -1,17 +1,15 @@
 /**
  * A class that can be used to interact with the EIP-5539 contract on behalf of a local controller key-pair
  */
-import {factories, RevocationRegistry} from "@spherity/ethr-revocation-registry/types/ethers-v5";
-import {BlockTag, JsonRpcProvider, Provider} from "@ethersproject/providers";
-import {Signer, TypedDataDomain} from "@ethersproject/abstract-signer";
-import {ContractTransaction} from "@ethersproject/contracts";
+import {factories, RevocationRegistry} from "@spherity/ethr-revocation-registry/types/ethers-v6";
+import {BlockTag} from "@ethersproject/providers";
+import {Signer, Provider, JsonRpcProvider, ContractTransactionResponse, ContractRunner, TypedDataDomain} from "ethers";
 import web3 from "web3";
 import {RevocationListPath} from "./types/RevocationListPath";
 import {RevocationKeyInstruction} from "./types/RevocationKeyInstruction";
 import {RevocationKeyPath} from "./types/RevocationKeyPath";
 import {isEmpty} from "lodash";
-import {Block} from "@ethersproject/abstract-provider";
-import {TypedEvent} from "@spherity/ethr-revocation-registry/types/ethers-v5/common";
+import {TypedContractEvent, TypedEventLog} from "@spherity/ethr-revocation-registry/types/ethers-v6/common";
 import {
   EIP712AddListDelegateType,
   EIP712ChangeListOwnerType,
@@ -23,21 +21,19 @@ import {
   EIP712RemoveListDelegateType,
   getRevocationRegistryDeploymentAddress
 } from "@spherity/ethr-revocation-registry";
-import {TypedDataSigner} from "@ethersproject/abstract-signer";
-import {BigNumber} from "@ethersproject/bignumber";
 import {RevocationKeysAndStatuses} from "./types/RevocationKeysAndStatuses";
 import {Networkish} from "@ethersproject/networks/src.ts/types";
 
 const DEFAULT_REGISTRY_CHAIN_ID = 1
 
-type TimestampedEvent = TypedEvent & {
+type TimestampedEvent<T extends TypedContractEvent> = T & {
   timestamp: number
 }
 
 export type Signaturish =  {
   signer: string
   signature: string
-  nonce: BigNumber
+  nonce: bigint
 }
 
 export type ChangeStatusSignedOperation = Signaturish & {
@@ -86,6 +82,10 @@ export interface IsRevokedOptions {
   blockTag?: BlockTag
 }
 
+const isSigner = (contractRunner: ContractRunner): contractRunner is Signer => {
+  return (contractRunner as Signer).getAddress !== undefined;
+}
+
 export class EthereumRevocationRegistryController {
   private registry: RevocationRegistry
   private typedDataDomain: TypedDataDomain | undefined
@@ -99,24 +99,20 @@ export class EthereumRevocationRegistryController {
     if (config.contract) {
       this.registry = config.contract
     } else if(config.signer && config.signer.provider) {
-      this.registry = new factories.RevocationRegistry__factory()
-        .attach(address)
-        .connect(config.signer)
+      this.registry = factories.RevocationRegistry__factory
+        .connect(address, config.signer)
     } else if(config.provider && !config.signer) {
-      this.registry = new factories.RevocationRegistry__factory()
-          .attach(address)
-          .connect(config.provider)
+      this.registry = factories.RevocationRegistry__factory
+        .connect(address,{provider: config.provider})
     } else if(config.rpcUrl && config.signer && config.network) {
       const provider = new JsonRpcProvider(config.rpcUrl, config.network)
       const attachedSigner = config.signer.connect(provider)
-      this.registry = new factories.RevocationRegistry__factory()
-          .attach(address)
-          .connect(attachedSigner)
+      this.registry = factories.RevocationRegistry__factory
+        .connect(address, attachedSigner)
     } else if(config.rpcUrl && !config.signer && config.network) {
       const provider = new JsonRpcProvider(config.rpcUrl, config.network)
-      this.registry = new factories.RevocationRegistry__factory()
-          .attach(address)
-          .connect(provider)
+      this.registry = factories.RevocationRegistry__factory
+        .connect(address, {provider: provider})
     } else {
       throw new Error("Either a contract instance, a provider with optional signer or a RPCUrl with a network with optional signer must be provided")
     }
@@ -124,28 +120,34 @@ export class EthereumRevocationRegistryController {
 
   private async getEip712Domain(): Promise<TypedDataDomain> {
     const version = await this.registry.version()
-    const network = await this.registry.provider.getNetwork()
-    const chainId = network.chainId
+    if(!this.registry.runner) throw new Error("Initialized without a contract runner.")
+    if(!this.registry.runner.provider) throw new Error("Initialized without a provider.")
+    const network = await this.registry.runner.provider.getNetwork();
+    const chainId = network.chainId;
 
     return {
       name: EIP712DomainName,
       version: version,
       chainId: chainId,
-      verifyingContract: this.registry.address
+      verifyingContract: await this.registry.getAddress()
     } as TypedDataDomain
   }
 
   public async getSignerAddress(): Promise<string> {
-    if(!this.registry.signer) {
-      throw new Error("Controller has no signer!")
+    if(!this.registry.runner) {
+      throw new Error("Controller has no runner!")
     }
-    return this.registry.signer.getAddress()
+    // TODO: improve this?
+    if('getAddress' in this.registry.runner) {
+      throw new Error("Controller has no runner!")
+    }
+    return (this.registry.runner as Signer).getAddress()
   }
 
   private validateSignaturish(signaturish: Signaturish) {
     this.validateAddress(signaturish.signer)
     this.validateSignature(signaturish.signature)
-    if(!signaturish.nonce) throw new Error("Nonce must be set")
+    if(signaturish.nonce === null) throw new Error("Nonce must be set")
   }
 
   private validateSignature(signature: string) {
@@ -199,28 +201,35 @@ export class EthereumRevocationRegistryController {
     }
   }
 
-  private async checkNonceForAddress(address: string, expectedNonce: BigNumber) {
+  private async checkNonceForAddress(address: string, expectedNonce: bigint) {
     const currentNonce = await this.registry.nonces(address)
-    if(!currentNonce.eq(expectedNonce)) {
+    if(currentNonce !== expectedNonce) {
       throw new Error(`Nonce in the payload is out of date or invalid (Expected: '${expectedNonce}' ; Current: '${currentNonce}').`)
     }
   }
 
-  private async getTimestampedEventsUntilDate(events: Array<TypedEvent>, timestamp: Date): Promise<Array<TimestampedEvent>> {
+  private async getTimestampedEventsUntilDate<T extends TypedContractEvent>(events: Array<TypedEventLog<T>>, timestamp: Date) {
     const timestampSeconds = Math.floor(timestamp.getTime()/1000);
-    let timestampedEvents = await Promise.all(events.map(async (event) => {
-      const block: Block = await event.getBlock()
+    const blocks = await Promise.all(events.map((event) => {
+      return event.getBlock();
+    }));
+
+    let timestampedEvents = blocks.map((block, index) => {
       if(block.timestamp <= timestampSeconds) {
-        return {...event, ...{timestamp: block.timestamp}}
+        return {...events[index], ...{timestamp: block.timestamp}};
       }
-    }))
+    });
+
+    // THIS IS THE GIGA HACK JUST TO REMOVE THE POSSIBLE UNDEFINED FROM THE ARRAY
+    // THAT IS INTRODUCED BY THE .MAP ABOVE
+    type timestampedEvent = Exclude<typeof timestampedEvents[0], undefined>;
+
     // remove unwanted undefined entries in array due to map usage
-    timestampedEvents = timestampedEvents.filter(item => item !== undefined)
-    // @ts-ignore
-    return this.sortByDateDescending(timestampedEvents)
+    timestampedEvents = timestampedEvents.filter(item => item !== undefined);
+    return this.sortByDateDescending(timestampedEvents as Array<timestampedEvent>);
   }
 
-  private sortByDateDescending(events: Array<TypedEvent & {timestamp: number}>): Array<TimestampedEvent> {
+  private sortByDateDescending<T extends { timestamp: number }>(events: Array<T>) {
     return events.sort(
         (eventA, eventB) => Number(eventB.timestamp) - Number(eventA.timestamp),
     )
@@ -236,6 +245,7 @@ export class EthereumRevocationRegistryController {
     } catch(error) {
       throw new Error("Cannot fetch revocation state due error fetching events of contract: " + error)
     }
+
     const timestampedListStatusChangedEvents = await this.getTimestampedEventsUntilDate(queryFilterReturnValues[0], timestamp);
     const timestampedRevocationStatusChangedEvents = await this.getTimestampedEventsUntilDate(queryFilterReturnValues[1], timestamp);
 
@@ -262,13 +272,13 @@ export class EthereumRevocationRegistryController {
     }
   }
 
-  async changeStatus(revoked: boolean, revocationKeyPath: RevocationKeyPath): Promise<ContractTransaction> {
+  async changeStatus(revoked: boolean, revocationKeyPath: RevocationKeyPath): Promise<ContractTransactionResponse> {
     if(revoked === undefined) throw new Error("revoked must be set")
     this.validateRevocationKeyPath(revocationKeyPath)
     return this.registry.changeStatus(revoked, revocationKeyPath.namespace, revocationKeyPath.list, revocationKeyPath.revocationKey)
   }
 
-  private async _changeStatusSigned(signedOperation: ChangeStatusSignedOperation, delegatedCall: boolean = false): Promise<ContractTransaction> {
+  private async _changeStatusSigned(signedOperation: ChangeStatusSignedOperation, delegatedCall: boolean = false): Promise<ContractTransactionResponse> {
     if(signedOperation.revoked === undefined) throw new Error("revoked must be set")
     this.validateSignaturish(signedOperation)
     this.validateRevocationKeyPath(signedOperation.revocationKeyPath)
@@ -295,7 +305,7 @@ export class EthereumRevocationRegistryController {
     }
   }
 
-  async changeStatusSigned(signedOperation: ChangeStatusSignedOperation): Promise<ContractTransaction> {
+  async changeStatusSigned(signedOperation: ChangeStatusSignedOperation): Promise<ContractTransactionResponse> {
     return this._changeStatusSigned(signedOperation)
   }
 
@@ -303,9 +313,11 @@ export class EthereumRevocationRegistryController {
     if(!this.typedDataDomain) {
       this.typedDataDomain = await this.getEip712Domain()
     }
-    if(!this.registry.signer) throw new Error("Please provide a signer in the constructor as it is required for the method to work!")
+    if(!this.registry.runner) throw new Error("Initialized without a contract runner.")
+    if(!this.registry.runner.provider) throw new Error("Initialized without a provider.")
+    if(!isSigner(this.registry.runner)) throw new Error("Please provide a signer in the constructor as it is required for the method to work!")
     this.validateRevocationKeyPath(revocationKeyPath)
-    const signer = await this.registry.signer.getAddress()
+    const signer = await this.registry.runner.getAddress()
     const nonce = await this.registry.nonces(signer)
 
     const values = {
@@ -314,14 +326,14 @@ export class EthereumRevocationRegistryController {
       revocationList: revocationKeyPath.list,
       revocationKey: revocationKeyPath.revocationKey,
       signer: signer,
-      nonce: nonce.toNumber()
+      nonce: nonce
     }
 
     let signature: string
     if(delegatedCall) {
-      signature = await (this.registry.signer as Signer & TypedDataSigner)._signTypedData(this.typedDataDomain, EIP712ChangeStatusDelegatedType, values)
+      signature = await this.registry.runner.signTypedData(this.typedDataDomain, EIP712ChangeStatusDelegatedType, values)
     } else {
-      signature = await (this.registry.signer as Signer & TypedDataSigner)._signTypedData(this.typedDataDomain, EIP712ChangeStatusType, values)
+      signature = await this.registry.runner.signTypedData(this.typedDataDomain, EIP712ChangeStatusType, values)
     }
 
     return {
@@ -337,12 +349,12 @@ export class EthereumRevocationRegistryController {
     return this._generateChangeStatusSignedPayload(revoked, revocationKeyPath)
   }
 
-  async changeStatusDelegated(revoked: boolean, revocationKeyPath: RevocationKeyPath): Promise<ContractTransaction> {
+  async changeStatusDelegated(revoked: boolean, revocationKeyPath: RevocationKeyPath): Promise<ContractTransactionResponse> {
     this.validateRevocationKeyPath(revocationKeyPath);
     return this.registry.changeStatusDelegated(revoked, revocationKeyPath.namespace,  revocationKeyPath.list, revocationKeyPath.revocationKey);
   }
 
-  async changeStatusDelegatedSigned(signedOperation: ChangeStatusSignedOperation): Promise<ContractTransaction> {
+  async changeStatusDelegatedSigned(signedOperation: ChangeStatusSignedOperation): Promise<ContractTransactionResponse> {
     return this._changeStatusSigned(signedOperation, true)
   }
 
@@ -371,7 +383,7 @@ export class EthereumRevocationRegistryController {
     }
   }
 
-  private async _changeStatusesInList(revocationListPath: RevocationListPath, revocationKeyInstructions: RevocationKeyInstruction[], delegatedCall: boolean = false): Promise<ContractTransaction> {
+  private async _changeStatusesInList(revocationListPath: RevocationListPath, revocationKeyInstructions: RevocationKeyInstruction[], delegatedCall: boolean = false): Promise<ContractTransactionResponse> {
     this.validateRevocationListPath(revocationListPath);
     const keysAndStatuses: RevocationKeysAndStatuses = this.convertRevocationKeyInstructions(revocationKeyInstructions)
 
@@ -382,11 +394,11 @@ export class EthereumRevocationRegistryController {
     }
   }
 
-  async changeStatusesInList(revocationListPath: RevocationListPath, revocationKeyInstructions: RevocationKeyInstruction[]): Promise<ContractTransaction> {
+  async changeStatusesInList(revocationListPath: RevocationListPath, revocationKeyInstructions: RevocationKeyInstruction[]): Promise<ContractTransactionResponse> {
     return this._changeStatusesInList(revocationListPath, revocationKeyInstructions)
   }
 
-  async _changeStatusesInListSigned(signedOperation: ChangeStatusesInListSignedOperation, delegatedCall: boolean = false): Promise<ContractTransaction> {
+  async _changeStatusesInListSigned(signedOperation: ChangeStatusesInListSignedOperation, delegatedCall: boolean = false): Promise<ContractTransactionResponse> {
     if(signedOperation.revocationKeyInstructions === undefined) throw new Error("revocationKeyInstructions must be set")
     this.validateSignaturish(signedOperation)
     this.validateRevocationListPath(signedOperation.revocationListPath)
@@ -416,7 +428,7 @@ export class EthereumRevocationRegistryController {
     }
   }
 
-  async changeStatusesInListSigned(signedOperation: ChangeStatusesInListSignedOperation): Promise<ContractTransaction> {
+  async changeStatusesInListSigned(signedOperation: ChangeStatusesInListSignedOperation): Promise<ContractTransactionResponse> {
     return this._changeStatusesInListSigned(signedOperation)
   }
 
@@ -424,11 +436,11 @@ export class EthereumRevocationRegistryController {
     return this._generateChangeStatusesInListSignedPayload(revocationListPath, revocationKeyInstructions)
   }
 
-  async changeStatusesInListDelegated(revocationListPath: RevocationListPath, revocationKeyInstructions: RevocationKeyInstruction[]): Promise<ContractTransaction> {
+  async changeStatusesInListDelegated(revocationListPath: RevocationListPath, revocationKeyInstructions: RevocationKeyInstruction[]): Promise<ContractTransactionResponse> {
     return this._changeStatusesInList(revocationListPath, revocationKeyInstructions, true)
   }
 
-  async changeStatusesInListDelegatedSigned(signedOperation: ChangeStatusesInListSignedOperation): Promise<ContractTransaction> {
+  async changeStatusesInListDelegatedSigned(signedOperation: ChangeStatusesInListSignedOperation): Promise<ContractTransactionResponse> {
     return this._changeStatusesInListSigned(signedOperation, true)
   }
 
@@ -440,9 +452,12 @@ export class EthereumRevocationRegistryController {
     if(!this.typedDataDomain) {
       this.typedDataDomain = await this.getEip712Domain()
     }
-    if(!this.registry.signer) throw new Error("Please provide a signer in the constructor as it is required for the method to work!")
+
+    if(!this.registry.runner) throw new Error("Initialized without a contract runner.")
+    if(!this.registry.runner.provider) throw new Error("Initialized without a provider.")
+    if(!isSigner(this.registry.runner)) throw new Error("Please provide a signer in the constructor as it is required for the method to work!")
     this.validateRevocationListPath(revocationListPath)
-    const signer = await this.registry.signer.getAddress()
+    const signer = await this.registry.runner.getAddress()
     const nonce = await this.registry.nonces(signer)
 
     const keysAndStatuses: RevocationKeysAndStatuses = this.convertRevocationKeyInstructions(revocationKeyInstructions)
@@ -453,14 +468,14 @@ export class EthereumRevocationRegistryController {
       revocationList: revocationListPath.list,
       revocationKeys: keysAndStatuses.revocationKeys,
       signer: signer,
-      nonce: nonce.toNumber()
+      nonce: nonce
     }
 
     let signature: string
     if(delegatedCall) {
-      signature = await (this.registry.signer as Signer & TypedDataSigner)._signTypedData(this.typedDataDomain, EIP712ChangeStatusesInListDelegatedType, values)
+      signature = await this.registry.runner.signTypedData(this.typedDataDomain, EIP712ChangeStatusesInListDelegatedType, values)
     } else {
-      signature = await (this.registry.signer as Signer & TypedDataSigner)._signTypedData(this.typedDataDomain, EIP712ChangeStatusesInListType, values)
+      signature = await this.registry.runner.signTypedData(this.typedDataDomain, EIP712ChangeStatusesInListType, values)
     }
 
     return {
@@ -472,13 +487,13 @@ export class EthereumRevocationRegistryController {
     } as ChangeStatusesInListSignedOperation
   }
 
-  async changeListOwner(revocationListPath: RevocationListPath, newOwner: string): Promise<ContractTransaction> {
+  async changeListOwner(revocationListPath: RevocationListPath, newOwner: string): Promise<ContractTransactionResponse> {
     this.validateRevocationListPath(revocationListPath);
     this.validateAddress(newOwner);
     return this.registry.changeListOwner(revocationListPath.namespace, newOwner, revocationListPath.list);
   }
 
-  async changeListOwnerSigned(signedOperation: ChangeListOwnerSignedOperation): Promise<ContractTransaction> {
+  async changeListOwnerSigned(signedOperation: ChangeListOwnerSignedOperation): Promise<ContractTransactionResponse> {
     const revocationListPath = signedOperation.revocationListPath
     this.validateRevocationListPath(revocationListPath);
     this.validateAddress(signedOperation.newOwner);
@@ -497,10 +512,13 @@ export class EthereumRevocationRegistryController {
     if(!this.typedDataDomain) {
       this.typedDataDomain = await this.getEip712Domain()
     }
-    if(!this.registry.signer) throw new Error("Please provide a signer in the constructor as it is required for the method to work!")
+
+    if(!this.registry.runner) throw new Error("Initialized without a contract runner.")
+    if(!this.registry.runner.provider) throw new Error("Initialized without a provider.")
+    if(!isSigner(this.registry.runner)) throw new Error("Please provide a signer in the constructor as it is required for the method to work!")
     this.validateRevocationListPath(revocationListPath)
     this.validateAddress(newOwner)
-    const signer = await this.registry.signer.getAddress()
+    const signer = await this.registry.runner.getAddress()
     const nonce = await this.registry.nonces(signer)
 
     const values = {
@@ -508,10 +526,10 @@ export class EthereumRevocationRegistryController {
       newOwner: newOwner,
       revocationList: revocationListPath.list,
       signer: signer,
-      nonce: nonce.toNumber()
+      nonce: nonce
     }
 
-    const signature = await (this.registry.signer as Signer & TypedDataSigner)._signTypedData(this.typedDataDomain, EIP712ChangeListOwnerType, values)
+    const signature = await this.registry.runner.signTypedData(this.typedDataDomain, EIP712ChangeListOwnerType, values)
 
     return {
       revocationListPath: revocationListPath,
@@ -522,7 +540,7 @@ export class EthereumRevocationRegistryController {
     } as ChangeListOwnerSignedOperation
   }
 
-  async addListDelegate(revocationListPath: RevocationListPath, delegate: string, expiryDate: Date): Promise<ContractTransaction> {
+  async addListDelegate(revocationListPath: RevocationListPath, delegate: string, expiryDate: Date): Promise<ContractTransactionResponse> {
     this.validateRevocationListPath(revocationListPath);
     this.validateAddress(delegate);
     this.validateExpiryDateIsInFuture(expiryDate)
@@ -531,7 +549,7 @@ export class EthereumRevocationRegistryController {
     return this.registry.addListDelegate(revocationListPath.namespace, delegate, revocationListPath.list, expiryDateEpochSeconds);
   }
 
-  async addListDelegateSigned(signedOperation: AddListDelegateSignedOperation): Promise<ContractTransaction> {
+  async addListDelegateSigned(signedOperation: AddListDelegateSignedOperation): Promise<ContractTransactionResponse> {
     const revocationListPath = signedOperation.revocationListPath
     this.validateRevocationListPath(revocationListPath);
     this.validateAddress(signedOperation.delegate);
@@ -554,12 +572,14 @@ export class EthereumRevocationRegistryController {
     if(!this.typedDataDomain) {
       this.typedDataDomain = await this.getEip712Domain()
     }
-    if(!this.registry.signer) throw new Error("Please provide a signer in the constructor as it is required for the method to work!")
+    if(!this.registry.runner) throw new Error("Initialized without a contract runner.")
+    if(!this.registry.runner.provider) throw new Error("Initialized without a provider.")
+    if(!isSigner(this.registry.runner)) throw new Error("Please provide a signer in the constructor as it is required for the method to work!")
     this.validateRevocationListPath(revocationListPath)
     this.validateAddress(delegate)
     this.validateExpiryDateIsInFuture(expiryDate)
     const expiryDateEpochSeconds = Math.floor(expiryDate.getTime() / 1000);
-    const signer = await this.registry.signer.getAddress()
+    const signer = await this.registry.runner.getAddress()
     const nonce = await this.registry.nonces(signer)
 
     const values = {
@@ -568,10 +588,10 @@ export class EthereumRevocationRegistryController {
       revocationList: revocationListPath.list,
       validity: expiryDateEpochSeconds,
       signer: signer,
-      nonce: nonce.toNumber()
+      nonce: nonce
     }
 
-    const signature = await (this.registry.signer as Signer & TypedDataSigner)._signTypedData(this.typedDataDomain, EIP712AddListDelegateType, values)
+    const signature = await this.registry.runner.signTypedData(this.typedDataDomain, EIP712AddListDelegateType, values)
 
     return {
       revocationListPath: revocationListPath,
@@ -583,14 +603,14 @@ export class EthereumRevocationRegistryController {
     } as AddListDelegateSignedOperation
   }
 
-  async removeListDelegate(revocationListPath: RevocationListPath, delegate: string): Promise<ContractTransaction> {
+  async removeListDelegate(revocationListPath: RevocationListPath, delegate: string): Promise<ContractTransactionResponse> {
     this.validateRevocationListPath(revocationListPath);
     this.validateAddress(delegate);
 
     return this.registry.removeListDelegate(revocationListPath.namespace, delegate, revocationListPath.list);
   }
 
-  async removeListDelegateSigned(signedOperation: RemoveListDelegateSignedOperation): Promise<ContractTransaction> {
+  async removeListDelegateSigned(signedOperation: RemoveListDelegateSignedOperation): Promise<ContractTransactionResponse> {
     const revocationListPath = signedOperation.revocationListPath
     this.validateRevocationListPath(revocationListPath);
     this.validateAddress(signedOperation.delegate);
@@ -603,10 +623,12 @@ export class EthereumRevocationRegistryController {
     if(!this.typedDataDomain) {
       this.typedDataDomain = await this.getEip712Domain()
     }
-    if(!this.registry.signer) throw new Error("Please provide a signer in the constructor as it is required for the method to work!")
+    if(!this.registry.runner) throw new Error("Initialized without a contract runner.")
+    if(!this.registry.runner.provider) throw new Error("Initialized without a provider.")
+    if(!isSigner(this.registry.runner)) throw new Error("Please provide a signer in the constructor as it is required for the method to work!")
     this.validateRevocationListPath(revocationListPath)
     this.validateAddress(delegate)
-    const signer = await this.registry.signer.getAddress()
+    const signer = await this.registry.runner.getAddress()
     const nonce = await this.registry.nonces(signer)
 
     const values = {
@@ -614,10 +636,10 @@ export class EthereumRevocationRegistryController {
       delegate: delegate,
       revocationList: revocationListPath.list,
       signer: signer,
-      nonce: nonce.toNumber()
+      nonce: nonce
     }
 
-    const signature = await (this.registry.signer as Signer & TypedDataSigner)._signTypedData(this.typedDataDomain, EIP712RemoveListDelegateType, values)
+    const signature = await this.registry.runner.signTypedData(this.typedDataDomain, EIP712RemoveListDelegateType, values)
 
     return {
       revocationListPath: revocationListPath,
@@ -628,13 +650,13 @@ export class EthereumRevocationRegistryController {
     } as RemoveListDelegateSignedOperation
   }
 
-  async changeListStatus(revoked: boolean, revocationListPath: RevocationListPath): Promise<ContractTransaction> {
+  async changeListStatus(revoked: boolean, revocationListPath: RevocationListPath): Promise<ContractTransactionResponse> {
     if(revoked === undefined) throw new Error("revoked must be set")
     this.validateRevocationListPath(revocationListPath)
     return this.registry.changeListStatus(revoked, revocationListPath.namespace, revocationListPath.list)
   }
 
-  async changeListStatusSigned(signedOperation: ChangeListStatusSignedOperation): Promise<ContractTransaction> {
+  async changeListStatusSigned(signedOperation: ChangeListStatusSignedOperation): Promise<ContractTransactionResponse> {
     if(signedOperation.revoked === undefined) throw new Error("revoked must be set")
     const revocationListPath = signedOperation.revocationListPath
     this.validateRevocationListPath(revocationListPath)
@@ -653,9 +675,11 @@ export class EthereumRevocationRegistryController {
     if(!this.typedDataDomain) {
       this.typedDataDomain = await this.getEip712Domain()
     }
-    if(!this.registry.signer) throw new Error("Please provide a signer in the constructor as it is required for the method to work!")
+    if(!this.registry.runner) throw new Error("Initialized without a contract runner.")
+    if(!this.registry.runner.provider) throw new Error("Initialized without a provider.")
+    if(!isSigner(this.registry.runner)) throw new Error("Please provide a signer in the constructor as it is required for the method to work!")
     this.validateRevocationListPath(revocationListPath)
-    const signer = await this.registry.signer.getAddress()
+    const signer = await this.registry.runner.getAddress()
     const nonce = await this.registry.nonces(signer)
 
     const values = {
@@ -663,10 +687,10 @@ export class EthereumRevocationRegistryController {
       namespace: revocationListPath.namespace,
       revocationList: revocationListPath.list,
       signer: signer,
-      nonce: nonce.toNumber()
+      nonce: nonce
     }
 
-    const signature = await (this.registry.signer as Signer & TypedDataSigner)._signTypedData(this.typedDataDomain, EIP712ChangeListStatusType, values)
+    const signature = await this.registry.runner.signTypedData(this.typedDataDomain, EIP712ChangeListStatusType, values)
 
     return {
       revoked: revoked,
