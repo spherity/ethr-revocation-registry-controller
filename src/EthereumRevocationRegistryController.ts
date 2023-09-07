@@ -310,12 +310,12 @@ export class EthereumRevocationRegistryController {
   }
 
   private async _generateChangeStatusSignedPayload(revoked: boolean, revocationKeyPath: RevocationKeyPath, delegatedCall: boolean = false): Promise<ChangeStatusSignedOperation> {
-    if(!this.typedDataDomain) {
+    if (!this.typedDataDomain) {
       this.typedDataDomain = await this.getEip712Domain()
     }
-    if(!this.registry.runner) throw new Error("Initialized without a contract runner.")
-    if(!this.registry.runner.provider) throw new Error("Initialized without a provider.")
-    if(!isSigner(this.registry.runner)) throw new Error("Please provide a signer in the constructor as it is required for the method to work!")
+    if (!this.registry.runner) throw new Error("Initialized without a contract runner.")
+    if (!this.registry.runner.provider) throw new Error("Initialized without a provider.")
+    if (!isSigner(this.registry.runner)) throw new Error("Please provide a signer in the constructor as it is required for the method to work!")
     this.validateRevocationKeyPath(revocationKeyPath)
     const signer = await this.registry.runner.getAddress()
     const nonce = await this.registry.nonces(signer)
