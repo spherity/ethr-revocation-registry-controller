@@ -512,7 +512,7 @@ describe('EthrRevocationRegistryController', () => {
         revocationKeyPath: revocationKeyPath,
         signer: validAddress,
         signature: web3.utils.keccak256("mockedSignature"),
-        nonce: 0n
+        nonce: 0
       } as ChangeStatusSignedOperation
 
       when(registryContractMock.nonces).calledWith(changeStatusSignedOperation.signer).mockResolvedValue(0n)
@@ -541,7 +541,7 @@ describe('EthrRevocationRegistryController', () => {
           revocationKeyPath: revocationKeyPath,
           signer: validAddress,
           signature: "",
-          nonce: 0n
+          nonce: 0
         } as ChangeStatusSignedOperation
 
         when(registryContractMock.nonces).calledWith(changeStatusSignedOperation.signer).mockResolvedValue(0n)
@@ -559,7 +559,7 @@ describe('EthrRevocationRegistryController', () => {
           revocationKeyPath: revocationKeyPath,
           signer: validAddress,
           signature: "asd",
-          nonce: 0n
+          nonce: 0
         } as ChangeStatusSignedOperation
 
         when(registryContractMock.nonces).calledWith(changeStatusSignedOperation.signer).mockResolvedValue(0n)
@@ -580,7 +580,7 @@ describe('EthrRevocationRegistryController', () => {
           revocationKeyPath: revocationKeyPath,
           signer: validAddress,
           signature: "",
-          nonce: 0n
+          nonce: 0
         } as ChangeStatusSignedOperation
 
         when(registryContractMock.nonces).calledWith(changeStatusSignedOperation.signer).mockResolvedValue(0n)
@@ -598,7 +598,7 @@ describe('EthrRevocationRegistryController', () => {
           revocationKeyPath: revocationKeyPath,
           signer: web3.utils.keccak256("invalidAddress"),
           signature: web3.utils.keccak256("mockedSignature"),
-          nonce: 0n
+          nonce: 0
         } as ChangeStatusSignedOperation
 
         when(registryContractMock.nonces).calledWith(changeStatusSignedOperation.signer).mockResolvedValue(0n)
@@ -637,7 +637,7 @@ describe('EthrRevocationRegistryController', () => {
           revocationKeyPath: revocationKeyPath,
           signer: validAddress,
           signature: "",
-          nonce: 0n
+          nonce: 0
         } as ChangeStatusSignedOperation
 
         when(registryContractMock.nonces).calledWith(changeStatusSignedOperation.signer).mockResolvedValue(1n)
@@ -658,7 +658,7 @@ describe('EthrRevocationRegistryController', () => {
           revocationKeyPath: revocationKeyPath,
           signer: validAddress,
           signature: web3.utils.keccak256("mockedSignature"),
-          nonce: 0n
+          nonce: 0
         } as ChangeStatusSignedOperation
 
         when(registryContractMock.nonces).calledWith(changeStatusSignedOperation.signer).mockResolvedValue(0n)
@@ -676,7 +676,7 @@ describe('EthrRevocationRegistryController', () => {
           revocationKeyPath: revocationKeyPath,
           signer: validAddress,
           signature: web3.utils.keccak256("mockedSignature"),
-          nonce: 0n
+          nonce: 0
         } as ChangeStatusSignedOperation
 
         when(registryContractMock.nonces).calledWith(changeStatusSignedOperation.signer).mockResolvedValue(0n)
@@ -697,7 +697,7 @@ describe('EthrRevocationRegistryController', () => {
           revocationKeyPath: revocationKeyPath,
           signer: validAddress,
           signature: web3.utils.keccak256("mockedSignature"),
-          nonce: 0n
+          nonce: 0
         } as ChangeStatusSignedOperation
 
         when(registryContractMock.nonces).calledWith(changeStatusSignedOperation.signer).mockResolvedValue(0n)
@@ -715,7 +715,7 @@ describe('EthrRevocationRegistryController', () => {
           revocationKeyPath: revocationKeyPath,
           signer: validAddress,
           signature: web3.utils.keccak256("mockedSignature"),
-          nonce: 0n
+          nonce: 0
         } as ChangeStatusSignedOperation
 
         when(registryContractMock.nonces).calledWith(changeStatusSignedOperation.signer).mockResolvedValue(0n)
@@ -736,7 +736,7 @@ describe('EthrRevocationRegistryController', () => {
           revocationKeyPath: revocationKeyPath,
           signer: validAddress,
           signature: web3.utils.keccak256("mockedSignature"),
-          nonce: 0n
+          nonce: 0
         } as ChangeStatusSignedOperation
 
         when(registryContractMock.nonces).calledWith(changeStatusSignedOperation.signer).mockResolvedValue(0n)
@@ -754,7 +754,7 @@ describe('EthrRevocationRegistryController', () => {
           revocationKeyPath: revocationKeyPath,
           signer: validAddress,
           signature: web3.utils.keccak256("mockedSignature"),
-          nonce: 0n
+          nonce: 0
         } as ChangeStatusSignedOperation
 
         when(registryContractMock.nonces).calledWith(changeStatusSignedOperation.signer).mockResolvedValue(0n)
@@ -767,7 +767,7 @@ describe('EthrRevocationRegistryController', () => {
   describe('generateChangeStatusSignedPayload input verification', () => {
     it('should return a ChangeStatusSignedOperation', async () => {
       const revocationStatus = true
-      const nonce = 0n
+      const nonce = 0
       const signature = "mockedSignatureasd"
       const revocationKeyPath: RevocationKeyPath = {
         namespace: validAddress,
@@ -782,7 +782,7 @@ describe('EthrRevocationRegistryController', () => {
         chainId: networkMock.chainId,
         verifyingContract: addressMock
       }, expect.anything(), expect.anything()).mockResolvedValue(signature)
-      when(registryContractMock.nonces).calledWith(validAddress).mockResolvedValue(nonce)
+      when(registryContractMock.nonces).calledWith(validAddress).mockResolvedValue(BigInt(nonce))
       expect(registry.generateChangeStatusSignedPayload(revocationStatus, revocationKeyPath)).resolves.toEqual({
         revoked: revocationStatus,
         revocationKeyPath: revocationKeyPath,

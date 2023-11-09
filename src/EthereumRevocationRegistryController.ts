@@ -33,7 +33,7 @@ type TimestampedEvent<T extends TypedContractEvent> = T & {
 export type Signaturish =  {
   signer: string
   signature: string
-  nonce: bigint
+  nonce: number
 }
 
 export type ChangeStatusSignedOperation = Signaturish & {
@@ -128,7 +128,7 @@ export class EthereumRevocationRegistryController {
     return {
       name: EIP712DomainName,
       version: version,
-      chainId: chainId,
+      chainId: Number(chainId),
       verifyingContract: await this.registry.getAddress()
     } as TypedDataDomain
   }
@@ -201,9 +201,9 @@ export class EthereumRevocationRegistryController {
     }
   }
 
-  private async checkNonceForAddress(address: string, expectedNonce: bigint) {
+  private async checkNonceForAddress(address: string, expectedNonce: number) {
     const currentNonce = await this.registry.nonces(address)
-    if(currentNonce !== expectedNonce) {
+    if(Number(currentNonce) !== expectedNonce) {
       throw new Error(`Nonce in the payload is out of date or invalid (Expected: '${expectedNonce}' ; Current: '${currentNonce}').`)
     }
   }
@@ -326,7 +326,7 @@ export class EthereumRevocationRegistryController {
       revocationList: revocationKeyPath.list,
       revocationKey: revocationKeyPath.revocationKey,
       signer: signer,
-      nonce: nonce
+      nonce: Number(nonce)
     }
 
     let signature: string
@@ -341,7 +341,7 @@ export class EthereumRevocationRegistryController {
       revocationKeyPath: revocationKeyPath,
       signer: signer,
       signature: signature,
-      nonce: nonce
+      nonce: Number(nonce)
     } as ChangeStatusSignedOperation
   }
 
@@ -468,7 +468,7 @@ export class EthereumRevocationRegistryController {
       revocationList: revocationListPath.list,
       revocationKeys: keysAndStatuses.revocationKeys,
       signer: signer,
-      nonce: nonce
+      nonce: Number(nonce)
     }
 
     let signature: string
@@ -483,7 +483,7 @@ export class EthereumRevocationRegistryController {
       revocationKeyInstructions: revocationKeyInstructions,
       signer: signer,
       signature: signature,
-      nonce: nonce
+      nonce: Number(nonce)
     } as ChangeStatusesInListSignedOperation
   }
 
@@ -526,7 +526,7 @@ export class EthereumRevocationRegistryController {
       newOwner: newOwner,
       revocationList: revocationListPath.list,
       signer: signer,
-      nonce: nonce
+      nonce: Number(nonce)
     }
 
     const signature = await this.registry.runner.signTypedData(this.typedDataDomain, EIP712ChangeListOwnerType, values)
@@ -536,7 +536,7 @@ export class EthereumRevocationRegistryController {
       newOwner: newOwner,
       signer: signer,
       signature: signature,
-      nonce: nonce
+      nonce: Number(nonce)
     } as ChangeListOwnerSignedOperation
   }
 
@@ -588,7 +588,7 @@ export class EthereumRevocationRegistryController {
       revocationList: revocationListPath.list,
       validity: expiryDateEpochSeconds,
       signer: signer,
-      nonce: nonce
+      nonce: Number(nonce)
     }
 
     const signature = await this.registry.runner.signTypedData(this.typedDataDomain, EIP712AddListDelegateType, values)
@@ -599,7 +599,7 @@ export class EthereumRevocationRegistryController {
       expiryDate: expiryDate,
       signer: signer,
       signature: signature,
-      nonce: nonce
+      nonce: Number(nonce)
     } as AddListDelegateSignedOperation
   }
 
@@ -636,7 +636,7 @@ export class EthereumRevocationRegistryController {
       delegate: delegate,
       revocationList: revocationListPath.list,
       signer: signer,
-      nonce: nonce
+      nonce: Number(nonce)
     }
 
     const signature = await this.registry.runner.signTypedData(this.typedDataDomain, EIP712RemoveListDelegateType, values)
@@ -646,7 +646,7 @@ export class EthereumRevocationRegistryController {
       delegate: delegate,
       signer: signer,
       signature: signature,
-      nonce: nonce
+      nonce: Number(nonce)
     } as RemoveListDelegateSignedOperation
   }
 
@@ -687,7 +687,7 @@ export class EthereumRevocationRegistryController {
       namespace: revocationListPath.namespace,
       revocationList: revocationListPath.list,
       signer: signer,
-      nonce: nonce
+      nonce: Number(nonce)
     }
 
     const signature = await this.registry.runner.signTypedData(this.typedDataDomain, EIP712ChangeListStatusType, values)
@@ -697,7 +697,7 @@ export class EthereumRevocationRegistryController {
       revocationListPath: revocationListPath,
       signer: signer,
       signature: signature,
-      nonce: nonce
+      nonce: Number(nonce)
     } as ChangeListStatusSignedOperation
   }
 
